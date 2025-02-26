@@ -47,8 +47,8 @@ And celery needs to be pre-configured in the django project, for example  `Using
 You could, for instance, make a ``CustomSignalProcessor`` which would apply
 update jobs as your wish.
 
-OPENSEARCH_DSL_PARALLEL
-==========================
+OPENSEARCH_PARALLEL
+===================
 
 Default: ``False``
 

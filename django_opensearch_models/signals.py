@@ -132,8 +132,8 @@ else:
 
         def handle_pre_delete(self, sender, instance, **kwargs):
             """Handle removing of instance object from related models instance.
-            We need to do this before the real delete otherwise the relation
-            doesn't exists anymore and we can't get the related models instance.
+            We need to do this before the real delete, otherwise the relation
+            doesn't exist anymore, and we can't get the related models instance.
             """
             self.prepare_registry_delete_related_task(instance)
 

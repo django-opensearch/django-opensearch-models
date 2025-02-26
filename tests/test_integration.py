@@ -3,7 +3,7 @@ import unittest
 
 import django
 from django.core.management import call_command
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 if django.VERSION < (4, 0):
     from django.utils.translation import ugettext_lazy as _
 else:

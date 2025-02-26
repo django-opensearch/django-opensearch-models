@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 '--use-alias' args
             """
         )
-        parser.set_defaults(parallel=getattr(settings, 'OPENSEARCH_DSL_PARALLEL', False))
+        parser.set_defaults(parallel=getattr(settings, 'OPENSEARCH_PARALLEL', False))
         parser.add_argument(
             '--refresh',
             action='store_true',

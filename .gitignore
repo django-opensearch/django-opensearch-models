@@ -48,3 +48,5 @@ docs/_buildenv*
 
 *.sqlite3
 _autofixture*
+/coverage.xml
+/.python-version
