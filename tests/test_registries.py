@@ -3,8 +3,8 @@ from unittest import TestCase
 
 from django.conf import settings
 
-from django_elasticsearch_dsl import Index
-from django_elasticsearch_dsl.registries import DocumentRegistry
+from django_opensearch_models import Index
+from django_opensearch_models.registries import DocumentRegistry
 
 from .fixtures import WithFixturesMixin
 
@@ -137,10 +137,10 @@ class DocumentRegistryTestCase(WithFixturesMixin, TestCase):
         self.doc_a2.update.assert_called_once_with(instance, action='delete')
 
     def test_autosync(self):
-        settings.ELASTICSEARCH_DSL_AUTOSYNC = False
+        settings.OPENSEARCH_DSL_AUTOSYNC = False
 
         instance = self.ModelA()
         self.registry.update(instance)
         self.assertFalse(self.doc_a1.update.called)
 
-        settings.ELASTICSEARCH_DSL_AUTOSYNC = True
+        settings.OPENSEARCH_DSL_AUTOSYNC = True

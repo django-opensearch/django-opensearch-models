@@ -5,10 +5,10 @@ from itertools import chain
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ImproperlyConfigured
-from elasticsearch_dsl import AttrDict
+from opensearchpy import AttrDict
 from six import itervalues, iterkeys, iteritems
 
-from django_elasticsearch_dsl.exceptions import RedeclaredFieldError
+from django_opensearch_models.exceptions import RedeclaredFieldError
 from .apps import DEDConfig
 
 
@@ -49,7 +49,7 @@ class DocumentRegistry(object):
         if not django_attr.model:
             raise ImproperlyConfigured("You must specify the django model")
 
-        # Add The model fields into elasticsearch mapping field
+        # Add The model fields into opensearch mapping field
         model_field_names = getattr(document.Django, "fields", [])
         mapping_fields = document._doc_type.mapping.properties.properties.to_dict().keys()
 
@@ -129,7 +129,7 @@ class DocumentRegistry(object):
 
     def update(self, instance, **kwargs):
         """
-        Update all the elasticsearch documents attached to this model (if their
+        Update all the opensearch documents attached to this model (if their
         ignore_signals flag allows it)
         """
         if not DEDConfig.autosync_enabled():
@@ -142,7 +142,7 @@ class DocumentRegistry(object):
 
     def delete(self, instance, **kwargs):
         """
-        Delete all the elasticsearch documents attached to this model (if their
+        Delete all the opensearch documents attached to this model (if their
         ignore_signals flag allows it)
         """
         self.update(instance, action="delete", **kwargs)

@@ -1,7 +1,7 @@
 from django.db.models import Case, When
 from django.db.models.fields import IntegerField
 
-from elasticsearch_dsl import Search as DSLSearch
+from opensearchpy import Search as DSLSearch
 
 
 class Search(DSLSearch):
@@ -16,7 +16,7 @@ class Search(DSLSearch):
 
     def filter_queryset(self, queryset, keep_search_order=True):
         """
-        Filter an existing django queryset using the elasticsearch result.
+        Filter an existing django queryset using the opensearch result.
         It costs a query to the sql db.
         """
         s = self
@@ -52,7 +52,7 @@ class Search(DSLSearch):
 
     def to_queryset(self, keep_order=True):
         """
-        Return a django queryset from the elasticsearch result.
+        Return a django queryset from the opensearch result.
         It costs a query to the sql db.
         """
         qs = self._get_queryset()

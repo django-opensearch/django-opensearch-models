@@ -2,17 +2,17 @@ from unittest import TestCase
 
 from mock import Mock, patch
 
-from django_elasticsearch_dsl.documents import DocType
-from django_elasticsearch_dsl.registries import registry
-from django_elasticsearch_dsl.signals import post_index
+from django_opensearch_models.documents import DocType
+from django_opensearch_models.registries import registry
+from django_opensearch_models.signals import post_index
 
 from .models import Car
 
 
 class PostIndexSignalTestCase(TestCase):
 
-    @patch('django_elasticsearch_dsl.documents.DocType._get_actions')
-    @patch('django_elasticsearch_dsl.documents.bulk')
+    @patch('django_opensearch_models.documents.DocType._get_actions')
+    @patch('django_opensearch_models.documents.bulk')
     def test_post_index_signal_sent(self, bulk, get_actions):
 
         @registry.register_document

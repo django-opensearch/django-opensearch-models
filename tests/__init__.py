@@ -1,3 +1,3 @@
-from elasticsearch_dsl import VERSION
+from opensearchpy import VERSION, OpenSearchException
 
-ES_MAJOR_VERSION = VERSION[0]
+OS_MAJOR_VERSION = VERSION[0]

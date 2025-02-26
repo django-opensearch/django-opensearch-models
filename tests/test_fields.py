@@ -9,15 +9,14 @@ else:
 from mock import Mock, NonCallableMock
 from six import string_types
 
-from django_elasticsearch_dsl.exceptions import VariableLookupError
-from django_elasticsearch_dsl.fields import (BooleanField, ByteField, CompletionField, DEDField,
+from django_opensearch_models.exceptions import VariableLookupError
+from django_opensearch_models.fields import (BooleanField, ByteField, CompletionField, DEDField,
                                              DateField, DoubleField, FileField, FloatField,
                                              GeoPointField,
                                              GeoShapeField, IntegerField, IpField, KeywordField,
                                              ListField, LongField,
                                              NestedField, ObjectField, ScaledFloatField, ShortField, TextField
                                              )
-from tests import ES_MAJOR_VERSION
 
 
 class DEDFieldTestCase(TestCase):
@@ -80,7 +79,7 @@ class ObjectFieldTestCase(TestCase):
             'last_name': TextField()
         })
 
-        expected_type = 'string' if ES_MAJOR_VERSION == 2 else 'text'
+        expected_type = 'text'
 
         self.assertEqual({
             'type': 'object',
@@ -257,7 +256,7 @@ class NestedFieldTestCase(TestCase):
             'last_name': TextField()
         })
 
-        expected_type = 'string' if ES_MAJOR_VERSION == 2 else 'text'
+        expected_type = 'text'
 
         self.assertEqual({
             'type': 'nested',
@@ -397,7 +396,7 @@ class FileFieldTestCase(TestCase):
     def test_get_mapping(self):
         field = FileField()
 
-        expected_type = 'string' if ES_MAJOR_VERSION == 2 else 'text'
+        expected_type = 'text'
 
         self.assertEqual({
             'type': expected_type,
@@ -424,7 +423,7 @@ class TextFieldTestCase(TestCase):
     def test_get_mapping(self):
         field = TextField()
 
-        expected_type = 'string' if ES_MAJOR_VERSION == 2 else 'text'
+        expected_type = 'text'
 
         self.assertEqual({
             'type': expected_type,
@@ -435,12 +434,6 @@ class KeywordFieldTestCase(TestCase):
     def test_get_mapping(self):
         field = KeywordField()
 
-        if ES_MAJOR_VERSION == 2:
-            self.assertEqual({
-                'type': 'string',
-                'index': 'not_analyzed',
-            }, field.to_dict())
-        else:
-            self.assertEqual({
-                'type': 'keyword',
-            }, field.to_dict())
+        self.assertEqual({
+            'type': 'keyword',
+        }, field.to_dict())

@@ -6,8 +6,8 @@ from functools import partial
 
 from django import VERSION as DJANGO_VERSION
 from django.db import models
-from elasticsearch.helpers import bulk, parallel_bulk
-from elasticsearch_dsl import Document as DSLDocument
+from opensearchpy.helpers import bulk, parallel_bulk
+from opensearchpy import Document as DSLDocument
 from six import iteritems
 
 from .exceptions import ModelFieldNotMappedError
@@ -150,7 +150,7 @@ class DocType(DSLDocument):
     @classmethod
     def get_model_field_class_to_field_class(cls):
         """
-        Returns dict of relationship from model field class to elasticsearch
+        Returns dict of relationship from model field class to OpenSearch
         field class
 
         You may want to override this if you have model field class not included
@@ -161,7 +161,7 @@ class DocType(DSLDocument):
     @classmethod
     def to_field(cls, field_name, model_field):
         """
-        Returns the elasticsearch field instance appropriate for the model
+        Returns the OpenSearch field instance appropriate for the model
         field class. This is a good place to hook into if you have more complex
         model field to ES field logic
         """
@@ -171,7 +171,7 @@ class DocType(DSLDocument):
         except KeyError:
             raise ModelFieldNotMappedError(
                 "Cannot convert model field {} "
-                "to an Elasticsearch field!".format(field_name)
+                "to an OpenSearch field!".format(field_name)
             )
 
     def bulk(self, actions, **kwargs):
@@ -219,10 +219,10 @@ class DocType(DSLDocument):
         for object_instance in object_list:
             if action == 'delete' or self.should_index_object(object_instance):
                 yield self._prepare_action(object_instance, action)
-    
+
     def get_actions(self, object_list, action):
         """
-        Generate the elasticsearch payload.
+        Generate the OpenSearch payload.
         """
         return self._get_actions(object_list, action)
 

@@ -31,24 +31,24 @@ readme = open('README.rst').read()
 history = open('HISTORY.rst').read().replace('.. :changelog:', '')
 
 setup(
-    name='django-elasticsearch-dsl',
+    name='django-opensearch-models',
     version=version,
     python_requires=">=3.8",
-    description="""Wrapper around elasticsearch-dsl-py for django models""",
+    description="""Wrapper around opensearch-py for django models""",
     long_description=readme + '\n\n' + history,
     author='Sabricot',
-    url='https://github.com/sabricot/django-elasticsearch-dsl',
+    url='https://github.com/django-opensearch/django-opensearch-models',
     packages=[
-        'django_elasticsearch_dsl',
+        'django_opensearch_models',
     ],
     include_package_data=True,
     install_requires=[
-        'elasticsearch-dsl>=8.9.0,<9.0.0',
+        'opensearch-py>=2.8.0,<3.0.0',
         'six',
     ],
     license="Apache Software License 2.0",
     zip_safe=False,
-    keywords='django elasticsearch elasticsearch-dsl',
+    keywords='django opensearch',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Framework :: Django',

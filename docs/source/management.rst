@@ -1,20 +1,20 @@
 Management Commands
 ###################
 
-Delete all indices in Elasticsearch or only the indices associate with a model (``--models``):
+Delete all indices in OpenSearch or only the indices associate with a model (``--models``):
 
 ::
 
     $ search_index --delete [-f] [--models [app[.model] app[.model] ...]]
 
 
-Create the indices and their mapping in Elasticsearch:
+Create the indices and their mapping in OpenSearch:
 
 ::
 
     $ search_index --create [--models [app[.model] app[.model] ...]]
 
-Populate the Elasticsearch mappings with the Django models data (index need to be existing):
+Populate the OpenSearch mappings with the Django models data (index need to be existing):
 
 ::
 

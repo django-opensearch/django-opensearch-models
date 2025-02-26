@@ -1,7 +1,7 @@
 Fields
 ######
 
-Once again the ``django_elasticsearch_dsl.fields`` are subclasses of elasticsearch-dsl-py
+Once again the ``django_opensearch_models.fields`` are subclasses of opensearch-py
 fields_. They just add support for retrieving data from django models.
 
 
@@ -39,13 +39,13 @@ like this:
 
     # documents.py
 
-    from django_elasticsearch_dsl import Document, fields
+    from django_opensearch_models import Document, fields
 
     # ... #
 
     @registry.register_document
     class CarDocument(Document):
-        # add a string field to the Elasticsearch mapping called type, the
+        # add a string field to the OpenSearch mapping called type, the
         # value of which is derived from the model's type_to_string attribute
         type = fields.TextField(attr="type_to_string")
 
@@ -66,7 +66,7 @@ Using prepare_field
 ===================
 
 Sometimes, you need to do some extra prepping before a field should be saved to
-Elasticsearch. You can add a ``prepare_foo(self, instance)`` method to a Document
+OpenSearch. You can add a ``prepare_foo(self, instance)`` method to a Document
 (where foo is the name of the field), and that will be called when the field
 needs to be saved.
 
@@ -118,7 +118,7 @@ You can use an ObjectField or a NestedField.
 
     # documents.py
 
-    from django_elasticsearch_dsl import Document, fields
+    from django_opensearch_models import Document, fields
     from .models import Car, Manufacturer, Ad
 
     @registry.register_document
@@ -164,7 +164,7 @@ You can use an ObjectField or a NestedField.
 Field Classes
 =============
 
-Most Elasticsearch field types_ are supported. The ``attr`` argument is a dotted
+Most OpenSearch field types_ are supported. The ``attr`` argument is a dotted
 "attribute path" which will be looked up on the model using Django template
 semantics (dict lookup, attribute lookup, list index lookup). By default the attr
 argument is set to the field name.
@@ -236,20 +236,20 @@ instance.
 
 Field Mapping
 =============
-Django Elasticsearch DSL maps most of the django fields
-appropriate Elasticsearch Field. You can find the field
+Django OpenSearch Models maps most of the django fields
+appropriate OpenSearch Field. You can find the field
 mapping on `documents.py` file in the `model_field_class_to_field_class`
 variable. If you need to change the behavior of this mapping, or add mapping
 for your custom field, you can do so by overwriting the classmethod
 `get_model_field_class_to_field_class`. Remember, you need to inherit
-`django_elasticsearch_dsl.fields.DEDField` for your custom field.
+`django_opensearch_models.fields.DEDField` for your custom field.
 Like following
 
 .. code-block:: python
 
-    from django_elasticsearch_dsl.fields import DEDField
+    from django_opensearch_models.fields import DEDField
 
-    class MyCustomDEDField(DEDField, ElasticsearchField):
+    class MyCustomDEDField(DEDField, OpenSearchField):
         pass
 
     @classmethod
@@ -262,7 +262,7 @@ Document id
 ===========
 
 The elasticsearch document id (``_id``) is not strictly speaking a field, as it is not
-part of the document itself. The default behavior of ``django_elasticsearch_dsl``
+part of the document itself. The default behavior of ``django_opensearch_models``
 is to use the primary key of the model as the document's id (``pk`` or ``id``).
 Nevertheless, it can sometimes be useful to change this default behavior. For this, one
 can redefine the ``generate_id(cls, instance)`` class method of the ``Document`` class.

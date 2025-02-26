@@ -1,4 +1,4 @@
-Django Elasticsearch DSL
+Django OpenSearch Models
 #########################
 
 Contents:

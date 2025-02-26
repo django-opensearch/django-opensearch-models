@@ -2,7 +2,7 @@ from mock import Mock
 
 from django.db import models
 
-from django_elasticsearch_dsl.documents import DocType
+from django_opensearch_models.documents import DocType
 
 
 class WithFixturesMixin(object):

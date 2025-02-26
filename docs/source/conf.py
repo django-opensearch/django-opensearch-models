@@ -49,9 +49,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'django-elasticsearch-dsl'
+project = 'django-opensearch-models'
 copyright = ''
-author = 'sabricot and others'
+author = 'sabricot, mizi and others'
 
 
 # The version info for the project you're documenting, acts as replacement for
@@ -120,9 +120,9 @@ html_theme = 'alabaster'
 # documentation.
 #html_theme_options = {}
 html_theme_options = {
-    'description': 'Using elasticsearch-dsl with Django',
-    'github_user': 'sabricot',
-    'github_repo': 'django-elasticsearch-dsl',
+    'description': 'Using opensearch-py with Django',
+    'github_user': 'd1opensource',
+    'github_repo': 'django-opensearch-models',
     'github_banner': True}
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -213,7 +213,7 @@ html_static_path = ['../_static']
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'django-elasticsearch-dsl'
+htmlhelp_basename = 'django-opensearch-models'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -235,7 +235,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'django_elasticsearch_dsl.tex', 'Django Elasticsearch DSL Documentation',
+    (master_doc, 'django_opensearch_models.tex', 'Django OpenSearch Models Documentation',
      author, 'manual'),
 ]
 
@@ -265,7 +265,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'django_elasticsearch_dsl', 'Django Elasticsearc DSL Documentation',
+    (master_doc, 'django_opensearch_models', 'Django Elasticsearc DSL Documentation',
      [author], 1)
 ]
 
@@ -279,8 +279,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'django_elasticsearch_dsl', 'Django Elasticsearch DSL Documentation',
-     author, 'django_elasticsearch_dsl', 'elasticsearch-dsl intégration in Django',
+    (master_doc, 'django_opensearch_models', 'Django OpenSearch Models Documentation',
+     author, 'django_opensearch_models', 'opensearch-py integration in Django',
      'Miscellaneous'),
 ]
 
@@ -300,6 +300,5 @@ texinfo_documents = [
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/', None),
-    'es-py': ('https://elasticsearch-py.readthedocs.io/en/master/', None) ,
-    'es-dsl': ('https://elasticsearch-dsl.readthedocs.io/en/latest/', None),
+    'os-py': ('https://opensearch-project.github.io/opensearch-py/', None) ,
 }

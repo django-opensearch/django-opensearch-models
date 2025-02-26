@@ -34,7 +34,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'django_elasticsearch_dsl',
+    'django_opensearch_models',
 
     # if your app has other dependencies that need to be added to the site
     # they should be added here
@@ -81,13 +81,13 @@ DATABASES = {
     }
 }
 
-ELASTICSEARCH_DSL = {
+OPENSEARCH_DSL = {
     'default': {
         'hosts': 'localhost:9200'
     },
 }
 
-ELASTICSEARCH_DSL_INDEX_SETTINGS = {
+OPENSEARCH_DSL_INDEX_SETTINGS = {
     'number_of_shards': 1
 }
 

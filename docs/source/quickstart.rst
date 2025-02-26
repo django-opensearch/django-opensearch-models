@@ -5,27 +5,27 @@ Quickstart
 Install and configure
 =====================
 
-Install Django Elasticsearch DSL::
+Install Django OpenSearch Models::
 
-    pip install django-elasticsearch-dsl
+    pip install django-opensearch-models
 
 
-Then add ``django_elasticsearch_dsl`` to the INSTALLED_APPS
+Then add ``django_opensearch_models`` to the INSTALLED_APPS
 
-You must define ``ELASTICSEARCH_DSL`` in your django settings.
+You must define ``OPENSEARCH_DSL`` in your django settings.
 
 For example:
 
 .. code-block:: python
 
-    ELASTICSEARCH_DSL={
+    OPENSEARCH_DSL={
         'default': {
             'hosts': 'localhost:9200',
             'http_auth': ('username', 'password')
         }
     }
 
-``ELASTICSEARCH_DSL`` is then passed to ``elasticsearch-dsl-py.connections.configure`` (see here_).
+``OPENSEARCH_DSL`` is then passed to ``opensearchpy.connections.configure`` (see here_).
 
 .. _here: http://elasticsearch-dsl.readthedocs.io/en/stable/configuration.html#multiple-clusters
 
@@ -48,10 +48,10 @@ Then for a model:
             (4, "SUV"),
         ])
 
-To make this model work with Elasticsearch,
-create a subclass of ``django_elasticsearch_dsl.Document``,
+To make this model work with OpenSearch,
+create a subclass of ``django_opensearch_models.Document``,
 create a ``class Index`` inside the ``Document`` class
-to define your Elasticsearch indices, names, settings etc
+to define your OpenSearch indices, names, settings etc
 and at last register the class using ``registry.register_document`` decorator.
 It is required to define ``Document`` class in  ``documents.py`` in your app directory.
 
@@ -59,24 +59,24 @@ It is required to define ``Document`` class in  ``documents.py`` in your app dir
 
     # documents.py
 
-    from django_elasticsearch_dsl import Document
-    from django_elasticsearch_dsl.registries import registry
+    from django_opensearch_models import Document
+    from django_opensearch_models.registries import registry
     from .models import Car
 
 
     @registry.register_document
     class CarDocument(Document):
         class Index:
-            # Name of the Elasticsearch index
+            # Name of the OpenSearch index
             name = 'cars'
-            # See Elasticsearch Indices API reference for available settings
+            # See OpenSearch Indices API reference for available settings
             settings = {'number_of_shards': 1,
                         'number_of_replicas': 0}
 
         class Django:
             model = Car # The model associated with this Document
 
-            # The fields of the model you want to be indexed in Elasticsearch
+            # The fields of the model you want to be indexed in OpenSearch
             fields = [
                 'name',
                 'color',
@@ -84,14 +84,14 @@ It is required to define ``Document`` class in  ``documents.py`` in your app dir
                 'type',
             ]
 
-            # Ignore auto updating of Elasticsearch when a model is saved
+            # Ignore auto updating of OpenSearch when a model is saved
             # or deleted:
             # ignore_signals = True
 
             # Configure how the index should be refreshed after an update.
-            # See Elasticsearch documentation for supported options:
+            # See OpenSearch documentation for supported options:
             # https://www.elastic.co/guide/en/elasticsearch/reference/master/docs-refresh.html
-            # This per-Document setting overrides settings.ELASTICSEARCH_DSL_AUTO_REFRESH.
+            # This per-Document setting overrides settings.OPENSEARCH_DSL_AUTO_REFRESH.
             # auto_refresh = False
 
             # Paginate the django queryset used to populate the index with the specified size
@@ -101,7 +101,7 @@ It is required to define ``Document`` class in  ``documents.py`` in your app dir
 Populate
 ========
 
-To create and populate the Elasticsearch index and mapping use the search_index command::
+To create and populate the OpenSearch index and mapping use the search_index command::
 
     $ ./manage.py search_index --rebuild
 
@@ -117,7 +117,7 @@ Now, when you do something like:
     )
     car.save()
 
-The object will be saved in Elasticsearch too (using a signal handler).
+The object will be saved in OpenSearch too (using a signal handler).
 
 Search
 ======
@@ -137,7 +137,7 @@ To get an elasticsearch-dsl-py Search_ instance, use:
             "Car name : {}, description {}".format(hit.name, hit.description)
         )
 
-The previous example returns a result specific to elasticsearch_dsl_,
+The previous example returns a result specific to opensearch_,
 but it is also possible to convert the elastisearch result into a real django queryset,
 just be aware that this costs a sql request to retrieve the model instances
 with the ids returned by the elastisearch query.

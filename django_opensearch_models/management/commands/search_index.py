@@ -1,7 +1,7 @@
 from __future__ import unicode_literals, absolute_import
 from datetime import datetime
 
-from elasticsearch_dsl import connections
+from opensearchpy import connections
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from six.moves import input
@@ -9,7 +9,7 @@ from ...registries import registry
 
 
 class Command(BaseCommand):
-    help = 'Manage elasticsearch index.'
+    help = 'Manage OpenSearch index.'
 
     def __init__(self, *args, **kwargs):
         super(Command, self).__init__(*args, **kwargs)
@@ -21,28 +21,28 @@ class Command(BaseCommand):
             metavar='app[.model]',
             type=str,
             nargs='*',
-            help="Specify the model or app to be updated in elasticsearch"
+            help="Specify the model or app to be updated in OpenSearch"
         )
         parser.add_argument(
             '--create',
             action='store_const',
             dest='action',
             const='create',
-            help="Create the indices in elasticsearch"
+            help="Create the indices in OpenSearch"
         )
         parser.add_argument(
             '--populate',
             action='store_const',
             dest='action',
             const='populate',
-            help="Populate elasticsearch indices with models data"
+            help="Populate OpenSearch indices with models data"
         )
         parser.add_argument(
             '--delete',
             action='store_const',
             dest='action',
             const='delete',
-            help="Delete the indices in elasticsearch"
+            help="Delete the indices in OpenSearch"
         )
         parser.add_argument(
             '--rebuild',
@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 '--use-alias' args
             """
         )
-        parser.set_defaults(parallel=getattr(settings, 'ELASTICSEARCH_DSL_PARALLEL', False))
+        parser.set_defaults(parallel=getattr(settings, 'OPENSEARCH_DSL_PARALLEL', False))
         parser.add_argument(
             '--refresh',
             action='store_true',
@@ -211,7 +211,7 @@ class Command(BaseCommand):
 
         delete_existing_index = False
         if not alias_exists and self.es_conn.indices.exists(index=alias):
-            # Elasticsearch will return an error if an index already
+            # OpenSearch will return an error if an index already
             # exists with the desired alias name. Therefore, we need to
             # delete that index.
             delete_existing_index = True
@@ -220,7 +220,7 @@ class Command(BaseCommand):
         old_indices = []
         alias_delete_actions = []
         if alias_exists:
-            # Elasticsearch will return an error if we search for
+            # OpenSearch will return an error if we search for
             # indices by alias but the alias doesn't exist. Therefore,
             # we want to be sure the alias exists.
             old_indices = self._get_alias_indices(alias)
@@ -262,7 +262,7 @@ class Command(BaseCommand):
             index_suffix = "-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
             for index in registry.get_indices(models):
                 # The alias takes the original index name value. The
-                # index name sent to Elasticsearch will be the alias
+                # index name sent to OpenSearch will be the alias
                 # plus the suffix from above. In addition, the index
                 # name needs to be limited to 255 characters, of which
                 # 21 will always be taken by the suffix, leaving 234
