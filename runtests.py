@@ -116,11 +116,6 @@ def run_tests(*test_args):
             'OPENSEARCH_PASSWORD', password
         )
 
-    if args.opensearch_certs_path:
-        os.environ.setdefault(
-            'OPENSEARCH_CERTS_PATH', args.opensearch_certs_path
-        )
-
     if not test_args:
         test_args = ['tests']
 

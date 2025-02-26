@@ -28,15 +28,14 @@ if sys.argv[-1] == 'tag':
     sys.exit()
 
 readme = open('README.rst').read()
-history = open('HISTORY.rst').read().replace('.. :changelog:', '')
 
 setup(
     name='django-opensearch-models',
     version=version,
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     description="""Wrapper around opensearch-py for django models""",
-    long_description=readme + '\n\n' + history,
-    author='Sabricot',
+    long_description=readme,
+    author='Mizi',
     url='https://github.com/django-opensearch/django-opensearch-models',
     packages=[
         'django_opensearch_models',
@@ -52,17 +51,19 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Framework :: Django',
-        'Framework :: Django :: 3.2',
         'Framework :: Django :: 4.1',
         'Framework :: Django :: 4.2',
+        'Framework :: Django :: 5.0',
+        'Framework :: Django :: 5.1',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
     ],
     extras_require={
         'celery':  ["celery>=4.1.0"],
