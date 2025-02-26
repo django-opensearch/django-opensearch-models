@@ -57,6 +57,7 @@ jobs:
           TOX_ENV=$(echo "py${{ matrix.python-version }}-django${{ matrix.django-version }}-os${{ matrix.ospy-version }}" | tr -d .)
           python -m tox -e $TOX_ENV
           python -m tox -e $TOX_ENV -- --signal-processor celery
+          python -m coverage xml
 
       - name: Coverage
         uses: ewjoachim/coverage-comment-action@v1
