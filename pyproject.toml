@@ -8,8 +8,8 @@ license = {file = "LICENSE"}
 dependencies = [
     "opensearch-py>=2.8.0,<3.0.0"
 ]
-authors = ["Alex Coates <mizi@mizi.ws>"]
-urls = ["https://github.com/django-opensearch/django-opensearch-models"]
+authors = [{"name" = "Alex Coates", "email" = "mizi@mizi.ws"}]
+urls = {"repository" = "https://github.com/django-opensearch/django-opensearch-models"}
 keywords = ["django", "opensearch"]
 classifiers = [
     "Development Status :: 3 - Alpha",
