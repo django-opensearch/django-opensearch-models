@@ -1,0 +1,74 @@
+[project]
+name = "django-opensearch-models"
+version = "1.0.0"
+description = "Wrapper around opensearch-py for django models"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+dependencies = [
+    "opensearch-py>=2.8.0,<3.0.0"
+]
+authors = ["Alex Coates <mizi@mizi.ws>"]
+urls = ["https://github.com/django-opensearch/django-opensearch-models"]
+keywords = ["django", "opensearch"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+
+[build-system]
+requires = ["setuptools>=61", "wheel", "build", "twine"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+celery = ["celery>=4.1.0"]
+
+[tool.setuptools]
+packages = ["django_opensearch_models"]
+
+[tool.ruff]
+line-length = 120
+preview = true
+target-version = "py39"
+lint.select = ["ALL"]
+lint.ignore = [
+    "COM812", "ISC001",  # These rules may cause conflicts when used with the ruff formatter
+    "C90",
+    "FBT002",
+    "CPY",
+    "PT",  # pytest
+    "SLF",
+    "ARG001", "ARG002",
+    "N801", "N802", "N803", "N805", "N806", "N818",
+    "PLR0904",  # Too many public methods
+    "PLR0913",  # Too many arguments to function call
+    "PLR0915",  # Too many statements
+    "PLR0912",  # Too many branches
+    "PLR0911",  # Too many return statements
+    "PLR0914",  # Too many local variables
+    "PLR0917",  # Too many positional arguments
+    "PLR1702",  # Too many nested blocks
+    "PLR6301",  # Method `perform_update` could be a function or static method
+    "RUF012",  # Too many issues with DRF classes and Django
+    # Missing annotations
+    "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204", "ANN205", "ANN206",
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    "D203", "D212",  # D203 and D211, D212 and D213 are mutually exclusive
+    "DOC201",  # `return` is not documented in docstring
+    "DOC402",  # `yield` is not documented in docstring
+    "DOC501",  # Raised exception ... missing from docstring"
+]

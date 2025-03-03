@@ -146,7 +146,7 @@ You can use an ObjectField or a NestedField.
 
         def get_queryset(self):
             """Not mandatory but to improve performance we can select related in one sql request"""
-            return super(CarDocument, self).get_queryset().select_related(
+            return super().get_queryset().select_related(
                 'manufacturer'
             )
 

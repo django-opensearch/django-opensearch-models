@@ -1,4 +1,3 @@
-from .testcases import ESTestCase, is_es_online
+from .testcases import OSTestCase, is_os_online
 
-
-__all__ = ['ESTestCase', 'is_es_online']
+__all__ = ["OSTestCase", "is_os_online"]

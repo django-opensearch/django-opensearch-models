@@ -32,6 +32,6 @@ TODO
 - Add management commands for mapping level operations (like update_mapping....).
 - Generate ObjectField/NestField properties from a Document class.
 - More examples.
-- Better ``ESTestCase`` and documentation for testing
+- Better ``OSTestCase`` and documentation for testing
 
 

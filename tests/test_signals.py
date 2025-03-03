@@ -1,6 +1,5 @@
 from unittest import TestCase
-
-from mock import Mock, patch
+from unittest.mock import Mock, patch
 
 from django_opensearch_models.documents import DocType
 from django_opensearch_models.registries import registry
@@ -10,15 +9,13 @@ from .models import Car
 
 
 class PostIndexSignalTestCase(TestCase):
-
-    @patch('django_opensearch_models.documents.DocType._get_actions')
-    @patch('django_opensearch_models.documents.bulk')
+    @patch("django_opensearch_models.documents.DocType._get_actions")
+    @patch("django_opensearch_models.documents.bulk")
     def test_post_index_signal_sent(self, bulk, get_actions):
-
         @registry.register_document
         class CarDocument(DocType):
             class Django:
-                fields = ['name']
+                fields = ["name"]
                 model = Car
 
         bulk.return_value = (1, [])
@@ -28,18 +25,11 @@ class PostIndexSignalTestCase(TestCase):
         post_index.connect(mock_receiver)
 
         doc = CarDocument()
-        car = Car(
-            pk=51,
-            name="Type 57"
-        )
+        car = Car(pk=51, name="Type 57")
         doc.update(car)
 
         bulk.assert_called_once()
 
         mock_receiver.assert_called_once_with(
-            signal=post_index,
-            sender=CarDocument,
-            instance=doc,
-            actions=get_actions(),
-            response=(1, [])
+            signal=post_index, sender=CarDocument, instance=doc, actions=get_actions(), response=(1, [])
         )

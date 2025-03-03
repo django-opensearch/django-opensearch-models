@@ -1,5 +1,5 @@
 from unittest import TestCase
-from mock import patch
+from unittest.mock import patch
 
 from django.conf import settings
 
@@ -15,8 +15,8 @@ class IndexTestCase(WithFixturesMixin, TestCase):
 
     def test_documents_add_to_register(self):
         registry = self.registry
-        with patch('django_opensearch_models.indices.registry', new=registry):
-            index = Index('test')
+        with patch("django_opensearch_models.indices.registry", new=registry):
+            index = Index("test")
             doc_a1 = self._generate_doc_mock(self.ModelA)
             doc_a2 = self._generate_doc_mock(self.ModelA)
             index.document(doc_a1)
@@ -26,22 +26,25 @@ class IndexTestCase(WithFixturesMixin, TestCase):
 
             index.document(doc_a2)
             docs = registry.get_documents()
-            self.assertEqual(docs, set([doc_a1, doc_a2]))
+            self.assertEqual(docs, {doc_a1, doc_a2})
 
     def test__str__(self):
-        index = Index('test')
-        self.assertEqual(index.__str__(), 'test')
+        index = Index("test")
+        self.assertEqual(str(index), "test")
 
     def test__init__(self):
-        settings.OPENSEARCH_DSL_INDEX_SETTINGS = {
-            'number_of_replicas': 0,
-            'number_of_shards': 2,
+        settings.OPENSEARCH_INDEX_SETTINGS = {
+            "number_of_replicas": 0,
+            "number_of_shards": 2,
         }
 
-        index = Index('test')
-        self.assertEqual(index._settings, {
-            'number_of_replicas': 0,
-            'number_of_shards': 2,
-        })
+        index = Index("test")
+        self.assertEqual(
+            index._settings,
+            {
+                "number_of_replicas": 0,
+                "number_of_shards": 2,
+            },
+        )
 
-        settings.OPENSEARCH_DSL_INDEX_SETTINGS = {}
+        settings.OPENSEARCH_INDEX_SETTINGS = {}

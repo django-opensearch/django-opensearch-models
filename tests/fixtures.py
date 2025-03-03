@@ -1,43 +1,51 @@
-from mock import Mock
+from unittest.mock import Mock
 
 from django.db import models
 
 from django_opensearch_models.documents import DocType
 
 
-class WithFixturesMixin(object):
-
+class WithFixturesMixin:
     class ModelA(models.Model):
         class Meta:
-            app_label = 'foo'
+            app_label = "foo"
+
+        def __str__(self):
+            return self.id
 
     class ModelB(models.Model):
         class Meta:
-            app_label = 'foo'
+            app_label = "foo"
+
+        def __str__(self):
+            return self.id
 
     class ModelC(models.Model):
         class Meta:
-            app_label = 'bar'
+            app_label = "bar"
+
+        def __str__(self):
+            return self.id
 
     class ModelD(models.Model):
-        pass
+        def __str__(self):
+            return self.id
 
     class ModelE(models.Model):
-        pass
+        def __str__(self):
+            return self.id
 
-    def _generate_doc_mock(self, _model, index=None, mock_qs=None,
-                           _ignore_signals=False, _related_models=None):
-        _index = index
+    def _generate_doc_mock(self, _model, index=None, mock_qs=None, _ignore_signals=False, _related_models=None):
+        index_ = index
 
         class Doc(DocType):
-
             class Django:
                 model = _model
                 related_models = _related_models if _related_models is not None else []
                 ignore_signals = _ignore_signals
 
-        if _index:
-            _index.document(Doc)
+        if index_:
+            index_.document(Doc)
             self.registry.register_document(Doc)
 
         Doc.update = Mock()

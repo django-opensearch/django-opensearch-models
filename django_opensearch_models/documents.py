@@ -1,14 +1,11 @@
-from __future__ import unicode_literals
-
 from collections import deque
 from fnmatch import fnmatch
 from functools import partial
 
 from django import VERSION as DJANGO_VERSION
 from django.db import models
+from opensearchpy import Document as OSDocument
 from opensearchpy.helpers import bulk, parallel_bulk
-from opensearchpy import Document as DSLDocument
-from six import iteritems
 
 from .exceptions import ModelFieldNotMappedError
 from .fields import (
@@ -21,7 +18,8 @@ from .fields import (
     KeywordField,
     LongField,
     ShortField,
-    TextField, TimeField,
+    TextField,
+    TimeField,
 )
 from .search import Search
 from .signals import post_index
@@ -50,17 +48,15 @@ model_field_class_to_field_class = {
     models.TimeField: TimeField,
     models.URLField: TextField,
     models.UUIDField: KeywordField,
+    models.PositiveBigIntegerField: LongField,
 }
 
-if DJANGO_VERSION >= (3.1,):
-    model_field_class_to_field_class[models.PositiveBigIntegerField] = LongField
 
-
-class DocType(DSLDocument):
+class DocType(OSDocument):
     _prepared_fields = []
 
     def __init__(self, related_instance_to_ignore=None, **kwargs):
-        super(DocType, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self._related_instance_to_ignore = related_instance_to_ignore
         self._prepared_fields = self.init_prepare()
 
@@ -74,59 +70,52 @@ class DocType(DSLDocument):
     def _matches(cls, hit):
         """
         Determine which index or indices in a pattern to be used in a hit.
-        Overrides DSLDocument _matches function to match indices in a pattern,
-        which is needed in case of using aliases. This is needed as the
-        document class will not be used to deserialize the documents. The
-        documents will have the index set to the concrete index, whereas the
-        class refers to the alias.
+
+        Overrides OSDocument _matches function to match indices in a pattern, which is needed in case of using aliases.
+        This is needed as the document class will not be used to deserialize the documents. The documents will have
+        the index set to the concrete index, whereas the class refers to the alias.
         """
         return fnmatch(hit.get("_index", ""), cls._index._name + "*")
 
     @classmethod
     def search(cls, using=None, index=None):
         return Search(
-            using=cls._get_using(using),
-            index=cls._default_index(index),
-            doc_type=[cls],
-            model=cls.django.model
+            using=cls._get_using(using), index=cls._default_index(index), doc_type=[cls], model=cls.django.model
         )
 
     def get_queryset(self):
-        """
-        Return the queryset that should be indexed by this doc type.
-        """
+        """Return the queryset that should be indexed by this doc type."""
         return self.django.model._default_manager.all()
 
     def get_indexing_queryset(self):
-        """
-        Build queryset (iterator) for use by indexing.
-        """
+        """Build queryset (iterator) for use by indexing."""
         qs = self.get_queryset()
         kwargs = {}
         if DJANGO_VERSION >= (2,) and self.django.queryset_pagination:
-            kwargs = {'chunk_size': self.django.queryset_pagination}
+            kwargs = {"chunk_size": self.django.queryset_pagination}
         return qs.iterator(**kwargs)
 
     def init_prepare(self):
         """
-        Initialise the data model preparers once here. Extracts the preparers
-        from the model and generate a list of callables to avoid doing that
-        work on every object instance over.
+        Initialise the data model preparers once.
+
+        Extracts the preparers from the model and generate a list of callables to avoid doing,
+        that work on every object instance over.
         """
-        index_fields = getattr(self, '_fields', {})
+        index_fields = getattr(self, "_fields", {})
         fields = []
-        for name, field in iteritems(index_fields):
+        for name, field in index_fields.items():
             if not isinstance(field, DEDField):
                 continue
 
             if not field._path:
                 field._path = [name]
 
-            prep_func = getattr(self, 'prepare_%s_with_related' % name, None)
+            prep_func = getattr(self, f"prepare_{name}_with_related", None)
             if prep_func:
                 fn = partial(prep_func, related_to_ignore=self._related_instance_to_ignore)
             else:
-                prep_func = getattr(self, 'prepare_%s' % name, None)
+                prep_func = getattr(self, f"prepare_{name}", None)
                 if prep_func:
                     fn = prep_func
                 else:
@@ -137,57 +126,40 @@ class DocType(DSLDocument):
         return fields
 
     def prepare(self, instance):
-        """
-        Take a model instance, and turn it into a dict that can be serialized
-        based on the fields defined on this DocType subclass
-        """
-        data = {
-            name: prep_func(instance)
-            for name, field, prep_func in self._prepared_fields
-        }
-        return data
+        """Turn instance it into a dict that can be serialized based on the fields defined on this DocType subclass."""
+        return {name: prep_func(instance) for name, field, prep_func in self._prepared_fields}
 
     @classmethod
     def get_model_field_class_to_field_class(cls):
         """
-        Returns dict of relationship from model field class to OpenSearch
-        field class
+        Return dict of relationship from model field class to OpenSearch field class.
 
-        You may want to override this if you have model field class not included
-        in model_field_class_to_field_class.
+        You may want to override this if you have model field class not included in model_field_class_to_field_class.
         """
         return model_field_class_to_field_class
 
     @classmethod
     def to_field(cls, field_name, model_field):
         """
-        Returns the OpenSearch field instance appropriate for the model
-        field class. This is a good place to hook into if you have more complex
-        model field to ES field logic
+        Return the OpenSearch field instance appropriate for the model field class.
+
+        This is a good place to hook into if you have more complex model field to ES field logic.
         """
         try:
-            return cls.get_model_field_class_to_field_class()[
-                model_field.__class__](attr=field_name)
-        except KeyError:
-            raise ModelFieldNotMappedError(
-                "Cannot convert model field {} "
-                "to an OpenSearch field!".format(field_name)
-            )
+            return cls.get_model_field_class_to_field_class()[model_field.__class__](attr=field_name)
+        except KeyError as e:
+            msg = f"Cannot convert model field {field_name} to an OpenSearch field!"
+            raise ModelFieldNotMappedError(msg) from e
 
     def bulk(self, actions, **kwargs):
         response = bulk(client=self._get_connection(), actions=actions, **kwargs)
         # send post index signal
-        post_index.send(
-            sender=self.__class__,
-            instance=self,
-            actions=actions,
-            response=response
-        )
+        post_index.send(sender=self.__class__, instance=self, actions=actions, response=response)
         return response
 
     def parallel_bulk(self, actions, **kwargs):
-        if self.django.queryset_pagination and 'chunk_size' not in kwargs:
-            kwargs['chunk_size'] = self.django.queryset_pagination
+        if self.django.queryset_pagination and "chunk_size" not in kwargs:
+            kwargs["chunk_size"] = self.django.queryset_pagination
         bulk_actions = parallel_bulk(client=self._get_connection(), actions=actions, **kwargs)
         # As the `parallel_bulk` is lazy, we need to get it into `deque` to run it instantly
         # See https://discuss.elastic.co/t/helpers-parallel-bulk-in-python-not-working/39498/2
@@ -199,68 +171,51 @@ class DocType(DSLDocument):
     @classmethod
     def generate_id(cls, object_instance):
         """
+        Get object id.
+
         The default behavior is to use the Django object's pk (id) as the
-        elasticseach index id (_id). If needed, this method can be overloaded
+        OpenSearch index id (_id). If needed, this method can be overloaded
         to change this default behavior.
         """
         return object_instance.pk
 
     def _prepare_action(self, object_instance, action):
         return {
-            '_op_type': action,
-            '_index': self._index._name,
-            '_id': self.generate_id(object_instance),
-            '_source': (
-                self.prepare(object_instance) if action != 'delete' else None
-            ),
+            "_op_type": action,
+            "_index": self._index._name,
+            "_id": self.generate_id(object_instance),
+            "_source": (self.prepare(object_instance) if action != "delete" else None),
         }
 
     def _get_actions(self, object_list, action):
         for object_instance in object_list:
-            if action == 'delete' or self.should_index_object(object_instance):
+            if action == "delete" or self.should_index_object(object_instance):
                 yield self._prepare_action(object_instance, action)
 
     def get_actions(self, object_list, action):
-        """
-        Generate the OpenSearch payload.
-        """
+        """Generate the OpenSearch payload."""
         return self._get_actions(object_list, action)
 
-
-    def _bulk(self, *args, **kwargs):
-        """Helper for switching between normal and parallel bulk operation"""
-        parallel = kwargs.pop('parallel', False)
+    def _bulk(self, *args, parallel: bool = False, **kwargs):
+        """Use parallel_bulk() if parallel is True, or bulk() otherwise."""
         if parallel:
             return self.parallel_bulk(*args, **kwargs)
-        else:
-            return self.bulk(*args, **kwargs)
+        return self.bulk(*args, **kwargs)
 
     def should_index_object(self, obj):
-        """
-        Overwriting this method and returning a boolean value
-        should determine whether the object should be indexed.
-        """
+        """Determine, whether the object should be indexed."""
         return True
 
-    def update(self, thing, refresh=None, action='index', parallel=False, **kwargs):
-        """
-        Update each document in ES for a model, iterable of models or queryset
-        """
+    def update(self, thing, refresh=None, action="index", parallel=False, **kwargs):
+        """Update each document in OpenSearch for a model, iterable of models or queryset."""
         if refresh is not None:
-            kwargs['refresh'] = refresh
+            kwargs["refresh"] = refresh
         elif self.django.auto_refresh:
-            kwargs['refresh'] = self.django.auto_refresh
+            kwargs["refresh"] = self.django.auto_refresh
 
-        if isinstance(thing, models.Model):
-            object_list = [thing]
-        else:
-            object_list = thing
+        object_list = [thing] if isinstance(thing, models.Model) else thing
 
-        return self._bulk(
-            self._get_actions(object_list, action),
-            parallel=parallel,
-            **kwargs
-        )
+        return self._bulk(self._get_actions(object_list, action), parallel=parallel, **kwargs)
 
 
 # Alias of DocType. Need to remove DocType in 7.x

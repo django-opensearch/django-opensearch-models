@@ -2,29 +2,29 @@ Settings
 ########
 
 
-OPENSEARCH_DSL_AUTOSYNC
-==========================
+OPENSEARCH_AUTOSYNC
+===================
 
 Default: ``True``
 
 Set to ``False`` to globally disable auto-syncing.
 
-OPENSEARCH_DSL_INDEX_SETTINGS
-================================
+OPENSEARCH_INDEX_SETTINGS
+=========================
 
 Default: ``{}``
 
 Additional options passed to the opensearch-py Index settings (like ``number_of_replicas`` or ``number_of_shards``).
 
-OPENSEARCH_DSL_AUTO_REFRESH
-==============================
+OPENSEARCH_AUTO_REFRESH
+=======================
 
 Default: ``True``
 
 Set to ``False`` not force an `index refresh <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_ with every save.
 
-OPENSEARCH_DSL_SIGNAL_PROCESSOR
-==================================
+OPENSEARCH_SIGNAL_PROCESSOR
+===========================
 
 This (optional) setting controls what SignalProcessor class is used to handle
 Django's signals and keep the search index up-to-date.
@@ -33,7 +33,7 @@ An example:
 
 .. code-block:: python
 
-    OPENSEARCH_DSL_SIGNAL_PROCESSOR = 'django_opensearch_models.signals.RealTimeSignalProcessor'
+    OPENSEARCH_SIGNAL_PROCESSOR = 'django_opensearch_models.signals.RealTimeSignalProcessor'
 
 Defaults to ``django_opensearch_models.signals.RealTimeSignalProcessor``.
 

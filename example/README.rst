@@ -18,7 +18,7 @@ connections setting in example/settings.py.
 
 .. code:: python
 
-    OPENSEARCH_DSL={
+    OPENSEARCH={
         'default': {
             'hosts': 'localhost:9200'
         },
