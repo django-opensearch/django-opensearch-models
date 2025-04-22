@@ -2,7 +2,6 @@ from collections import deque
 from fnmatch import fnmatch
 from functools import partial
 
-from django import VERSION as DJANGO_VERSION
 from django.db import models
 from opensearchpy import Document as OSDocument
 from opensearchpy.helpers import bulk, parallel_bulk
@@ -91,7 +90,7 @@ class DocType(OSDocument):
         """Build queryset (iterator) for use by indexing."""
         qs = self.get_queryset()
         kwargs = {}
-        if DJANGO_VERSION >= (2,) and self.django.queryset_pagination:
+        if self.django.queryset_pagination:
             kwargs = {"chunk_size": self.django.queryset_pagination}
         return qs.iterator(**kwargs)
 

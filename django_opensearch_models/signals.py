@@ -1,12 +1,10 @@
 """A convenient way to attach django-opensearch-models to Django's signals and cause things to index."""
 
-from importlib import import_module
-
 from django.apps import apps
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.dispatch import Signal
-
+from django.utils.module_loading import import_string
 from .registries import registry
 
 # Sent after document indexing is completed
@@ -17,8 +15,7 @@ class BaseSignalProcessor:
     """
     Base signal processor.
 
-    By default, does nothing with signals but provides underlying
-    functionality.
+    By default, it does nothing with signals but provides underlying functionality.
     """
 
     def __init__(self, connections):
@@ -29,23 +26,19 @@ class BaseSignalProcessor:
         """
         Set up.
 
-        A hook for setting up anything necessary for
-        ``handle_save/handle_delete`` to be executed.
+        A hook for setting up anything necessary for ``handle_save/handle_delete`` to be executed.
 
-        Default behavior is to do nothing (``pass``).
+        The default behavior is to do nothing (``pass``).
         """
-        # Do nothing.
 
     def teardown(self):
         """
-        Tear-down.
+        Tear down.
 
-        A hook for tearing down anything necessary for
-        ``handle_save/handle_delete`` to no longer be executed.
+        A hook for tearing down anything necessary for ``handle_save/handle_delete`` to no longer be executed.
 
-        Default behavior is to do nothing (``pass``).
+        The default behavior is to do nothing (``pass``).
         """
-        # Do nothing.
 
     def handle_m2m_changed(self, sender, instance, action, **kwargs):
         if action in {"post_add", "post_remove", "post_clear"}:
@@ -55,10 +48,10 @@ class BaseSignalProcessor:
 
     def handle_save(self, sender, instance, **kwargs):
         """
-        Handle save.
+        Handle the saving.
 
         Given an individual model instance, update the object in the index.
-        Update the related objects either.
+        Update the related objects as well.
         """
         registry.update(instance)
         registry.update_related(instance)
@@ -67,14 +60,14 @@ class BaseSignalProcessor:
         """
         Handle removing of instance object from related models instance.
 
-        We need to do this before the real delete otherwise the relation
-        doesn't exists anymore and we can't get the related models instance.
+        We need to do this before the real delete, otherwise the relation
+        doesn't exist anymore, and we can't get the related models instance.
         """
         registry.delete_related(instance)
 
     def handle_delete(self, sender, instance, **kwargs):
         """
-        Handle delete.
+        Handle the deletion.
 
         Given an individual model instance, delete the object from index.
         """
@@ -116,13 +109,11 @@ else:
         """
         Celery signal processor.
 
-        Allows automatic updates on the index as delayed background tasks using
-        Celery.
+        Allows automatic updates on the index as delayed background tasks using Celery.
 
         NB: We cannot process deletes as background tasks.
-        By the time the Celery worker would pick up the delete job, the
-        model instance would already deleted. We can get around this by
-        setting Celery to use `pickle` and sending the object to the worker,
+        By the time the Celery worker would pick up the delete job, the model instance would be already deleted.
+        We can get around this by setting Celery to use `pickle` and sending the object to the worker,
         but using `pickle` opens the application up to security concerns.
         """
 
@@ -131,7 +122,7 @@ else:
             Handle save with a Celery task.
 
             Given an individual model instance, update the object in the index.
-            Update the related objects either.
+            Update the related objects as well.
             """
             pk = instance.pk
             app_label = instance._meta.app_label
@@ -147,18 +138,6 @@ else:
             We need to do this before the real delete, otherwise the relation
             doesn't exist anymore, and we can't get the related models instance.
             """
-            self.prepare_registry_delete_related_task(instance)
-
-        def handle_delete(self, sender, instance, **kwargs):
-            """
-            Handle delete.
-
-            Given an individual model instance, delete the object from index.
-            """
-            self.prepare_registry_delete_task(instance)
-
-        def prepare_registry_delete_related_task(self, instance):
-            """Select its related instance before this instance was deleted and pass that to celery."""
             action = "index"
             for doc in registry._get_related_doc(instance):
                 doc_instance = doc(related_instance_to_ignore=instance)
@@ -169,25 +148,15 @@ else:
                 if related is not None:
                     doc_instance.update(related)
                     object_list = [related] if isinstance(related, models.Model) else related
-                    bulk_data = (list(doc_instance._get_actions(object_list, action)),)
-                    self.registry_delete_task.delay(doc_instance.__class__.__name__, bulk_data)
+                    bulk_data = list(doc_instance._get_actions(object_list, action))
+                    self.registry_delete_task.delay(self.get_full_qualname(doc_instance), bulk_data)
 
-        @staticmethod
-        @shared_task()
-        def registry_delete_task(doc_label, bulk_data):
+        def handle_delete(self, sender, instance, **kwargs):
             """
-            Handle the bulk delete data on the registry as a Celery task.
+            Handle the deletion.
 
-            The different implementations used are due to the difference between delete and update operations.
-            The update operation can re-read the updated data from the database to ensure eventual consistency,
-            but the delete needs to be processed before the database record is deleted to obtain the associated data.
+            Given an individual model instance, delete the object from the index.
             """
-            doc_instance = import_module(doc_label)
-            parallel = True
-            doc_instance._bulk(bulk_data, parallel=parallel)
-
-        def prepare_registry_delete_task(self, instance):
-            """Get the prepare did before database record deleted."""
             action = "delete"
             for doc in registry._get_related_doc(instance):
                 doc_instance = doc(related_instance_to_ignore=instance)
@@ -198,9 +167,28 @@ else:
                 if related is not None:
                     doc_instance.update(related)
                     object_list = [related] if isinstance(related, models.Model) else related
-                    bulk_data = (list(doc_instance.get_actions(object_list, action)),)
-                    self.registry_delete_task.delay(doc_instance.__class__.__name__, bulk_data)
+                    bulk_data = list(doc_instance.get_actions(object_list, action))
+                    self.registry_delete_task.delay(self.get_full_qualname(doc_instance), bulk_data)
 
+        def get_full_qualname(self, doc_instance):
+            """Get the full qualified name of the instance's class."""
+            return f"{doc_instance.__class__.__module__}.{doc_instance.__class__.__name__}"
+
+        @staticmethod
+        @shared_task()
+        def registry_delete_task(doc_label, bulk_data):
+            """
+            Handle the bulk delete data on the registry as a Celery task.
+
+            The different implementations used are due to the difference between delete and update operations.
+            The update operation can re-read the updated data from the database to ensure eventual consistency,
+            but the deletion needs to be processed before the database record is deleted to get the associated data.
+            """
+            doc_instance = import_string(doc_label)()
+            parallel = True
+            doc_instance._bulk(bulk_data, parallel=parallel)
+
+        @staticmethod
         @shared_task()
         def registry_update_task(pk, app_label, model_name):
             """Handle the update on the registry as a Celery task."""
@@ -211,6 +199,7 @@ else:
             else:
                 registry.update(model.objects.get(pk=pk))
 
+        @staticmethod
         @shared_task()
         def registry_update_related_task(pk, app_label, model_name):
             """Handle the related update on the registry as a Celery task."""
