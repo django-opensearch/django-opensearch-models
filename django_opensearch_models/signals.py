@@ -127,7 +127,6 @@ else:
             pk = instance.pk
             app_label = instance._meta.app_label
             model_name = instance.__class__.__name__
-
             self.registry_update_task.delay(pk, app_label, model_name)
             self.registry_update_related_task.delay(pk, app_label, model_name)
 
@@ -195,9 +194,11 @@ else:
             try:
                 model = apps.get_model(app_label, model_name)
             except LookupError:
-                pass
-            else:
+                return
+            try:
                 registry.update(model.objects.get(pk=pk))
+            except model.DoesNotExist:
+                return
 
         @staticmethod
         @shared_task()
@@ -206,6 +207,8 @@ else:
             try:
                 model = apps.get_model(app_label, model_name)
             except LookupError:
-                pass
-            else:
+                return
+            try:
                 registry.update_related(model.objects.get(pk=pk))
+            except model.DoesNotExist:
+                return
