@@ -144,7 +144,8 @@ else:
                     related = doc_instance.get_instances_from_related(instance)
                 except ObjectDoesNotExist:
                     related = None
-                if related is not None:
+                # We check if pk isn't None, because we can only update for saved and not deleted instances.
+                if related is not None and (not isinstance(related, models.Model) or related.pk):
                     doc_instance.update(related)
                     object_list = [related] if isinstance(related, models.Model) else related
                     bulk_data = list(doc_instance._get_actions(object_list, action))
@@ -163,7 +164,7 @@ else:
                     related = doc_instance.get_instances_from_related(instance)
                 except ObjectDoesNotExist:
                     related = None
-                if related is not None:
+                if related is not None and (not isinstance(related, models.Model) or related.pk):
                     doc_instance.update(related)
                     object_list = [related] if isinstance(related, models.Model) else related
                     bulk_data = list(doc_instance.get_actions(object_list, action))
