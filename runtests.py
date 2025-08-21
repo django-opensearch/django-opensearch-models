@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from celery import Celery
 
@@ -20,12 +21,14 @@ try:
         }
 
         signal_processor = PROCESSOR_CLASSES[signal_processor]
+
         settings.configure(
             DEBUG=True,
             USE_TZ=True,
             DATABASES={
                 "default": {
                     "ENGINE": "django.db.backends.sqlite3",
+                    "NAME": Path(__file__).parent / "db.sqlite3",
                 }
             },
             INSTALLED_APPS=[

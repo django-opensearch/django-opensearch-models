@@ -13,21 +13,21 @@ def is_os_online(connection_alias="default"):
 
 
 class OSTestCase:
-    _index_suffixe = "_ded_test"
+    _index_suffix = "_ded_test"
 
     def setUp(self):
         for doc in registry.get_documents():
-            doc._index._name += self._index_suffixe
+            doc._index._name += self._index_suffix
 
         for index in registry.get_indices():
-            index._name += self._index_suffixe
+            index._name += self._index_suffix
             index.delete(ignore=[404, 400])
             index.create()
 
         super().setUp()
 
     def tearDown(self):
-        pattern = re.compile(self._index_suffixe + "$")
+        pattern = re.compile(self._index_suffix + "$")
 
         for index in registry.get_indices():
             index.delete(ignore=[404, 400])

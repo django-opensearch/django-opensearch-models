@@ -1,6 +1,0 @@
-wheel>=0.45.1
-django>=5.1
-opensearch-py>=2.8.0,<3.0.0
-twine
-sphinx
--e .

@@ -1,2 +1,0 @@
-django>=3.2
-opensearch-py>=2.8.0,<3.0.0

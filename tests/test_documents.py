@@ -442,6 +442,13 @@ class BaseDocTypeTestCase:
             d.update(article)
             patched_method.assert_called()
 
+    def parse_body(self, call_args):
+        if call_args[0]:  # opensearch-py 2.x
+            body = call_args[0][0]
+        else:  # opensearch-py 3.x
+            body = call_args[1]["body"]
+        return json.loads(body.strip().split("\n")[1])
+
     @patch("opensearchpy.OpenSearch.bulk")
     def test_custom_generate_id_is_called(self, mock_bulk):
         article = Article(
@@ -467,10 +474,9 @@ class BaseDocTypeTestCase:
         d = ArticleDocument()
         d.update(article)
 
-        # Get the data from the OpenSearch low level API because
-        # The generator get executed there.
-        data = json.loads(mock_bulk.call_args[0][0].strip().split("\n")[1])
-        self.assertEqual(data["slug"], article.slug)
+        # Get the data from the OpenSearch low level API because the generator gets executed there.
+        document = self.parse_body(mock_bulk.call_args)
+        self.assertEqual(document["slug"], article.slug)
 
     @patch("opensearchpy.OpenSearch.bulk")
     def test_should_index_object_is_called(self, _mock_bulk):
@@ -506,10 +512,7 @@ class BaseDocTypeTestCase:
 
         d = ArticleDocument()
         d.update([article1, article2])
-        operations = mock_bulk.call_args[0]
-        self.assertEqual(len(operations), 1)
-        _action, document = operations[0].strip().split("\n")
-        document = json.loads(document)
+        document = self.parse_body(mock_bulk.call_args)
         self.assertEqual(document["slug"], article2.slug)
 
 

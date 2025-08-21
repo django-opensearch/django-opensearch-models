@@ -3,12 +3,9 @@ name = "django-opensearch-models"
 version = "1.0.0"
 description = "Wrapper around opensearch-py for django models"
 readme = "README.md"
-requires-python = ">=3.9"
-license = {file = "LICENSE"}
-dependencies = [
-    "opensearch-py>=2.8.0,<3.0.0"
+authors = [
+    { name = "Alex Coates", email = "mizi@mizi.ws" }
 ]
-authors = [{"name" = "Alex Coates", "email" = "mizi@mizi.ws"}]
 urls = {"repository" = "https://github.com/django-opensearch/django-opensearch-models"}
 keywords = ["django", "opensearch"]
 classifiers = [
@@ -18,6 +15,7 @@ classifiers = [
     "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
     "Natural Language :: English",
@@ -28,17 +26,20 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-
-
-[build-system]
-requires = ["setuptools>=61", "wheel", "build", "twine"]
-build-backend = "setuptools.build_meta"
+requires-python = ">=3.10"
+dependencies = [
+    "django>=4.2",
+    "opensearch-py>=2.8.0,<3.1.0",
+]
 
 [project.optional-dependencies]
-celery = ["celery>=4.1.0"]
+celery = [
+    "celery>=4.1.0",
+]
 
-[tool.setuptools]
-packages = ["django_opensearch_models"]
+[build-system]
+requires = ["uv_build>=0.8.6,<0.9.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 120
@@ -71,4 +72,15 @@ lint.ignore = [
     "DOC201",  # `return` is not documented in docstring
     "DOC402",  # `yield` is not documented in docstring
     "DOC501",  # Raised exception ... missing from docstring"
+]
+
+[dependency-groups]
+dev = [
+    "celery>=5.5.3",
+    "celery-types>=0.23.0",
+    "coverage>=7.10.4",
+    "django>=5.2",
+    "pillow>=11.3.0",
+    "ruff>=0.12.9",
+    "sphinx>=8.1.3",
 ]
