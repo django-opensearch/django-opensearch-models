@@ -1,6 +1,6 @@
 # Django OpenSearch Models
 
-![Coverage badge](https://img.shields.io/endpoint?url=https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wiki/django-opensearch/django-opensearch-models/coverage-comment-badge.json)
+![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wiki/django-opensearch/django-opensearch-models/coverage-comment-badge.json)
 
 
 A clone of [django-elasticsearch-dsl][django-elasticsearch-dsl], that supports OpenSearch instead of Elasticsearch.

@@ -3,6 +3,7 @@
 from django.apps import apps
 from django.db import models
 from django.dispatch import Signal
+
 from .registries import registry
 
 # Sent after document indexing is completed
