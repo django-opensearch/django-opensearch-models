@@ -1,0 +1,252 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# Granted per job, never globally.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  UV_VERSION: "0.11.28"
+  # The interpreter for the jobs that are not part of the test matrix.
+  # Without this they fall back to whatever the runner image ships, which
+  # is not a supported version and not stable over time.
+  DEFAULT_PYTHON: "3.13"
+  UV_FROZEN: "1"
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv run --frozen --no-default-groups --group tox tox run -e lint
+        env:
+          RUFF_OUTPUT_FORMAT: github
+
+  metadata:
+    name: metadata consistency
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+      - name: Version metadata agrees with itself
+        run: uv run --no-project python .github/scripts/check_release_consistency.py
+
+  build:
+    name: build and smoke-test artifacts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      # Asserts the shipped `test` subpackage survives packaging. Build-backend
+      # exclude patterns match a bare name at any depth, so a pattern meant for
+      # the top-level tests/ directory can also strip
+      # django_opensearch_models/test/ from both artifacts. Nothing else in CI
+      # imports from an installed artifact, so nothing else would notice.
+      - run: uv run --frozen --no-default-groups --group tox tox run -e build
+
+      - name: Smoke-install the wheel into a clean environment
+        run: |
+          set -euo pipefail
+          uv venv --python "${DEFAULT_PYTHON}" /tmp/smoke
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          /tmp/smoke/bin/python - <<'PY'
+          import django_opensearch_models as m
+          from django_opensearch_models.test import OSTestCase, is_os_online
+          from django_opensearch_models.management.commands import search_index
+          print("ok", m.__version__, OSTestCase.__name__, is_os_online.__name__, search_index.__name__)
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # A representative slice: the oldest supported combination, the newest,
+        # and one leg per (django, server) edge. The full cross product runs in
+        # nightly.yml -- see .github/workflows/nightly.yml.
+        include:
+          - name: "py312 dj52 os2.19.6 (floor)"
+            python: "3.12"
+            toxenv: py312-dj52
+            opensearch: "2.19.6"
+          - name: "py313 dj52 os3.8.0"
+            python: "3.13"
+            toxenv: py313-dj52
+            opensearch: "3.8.0"
+          - name: "py312 dj60 os3.8.0"
+            python: "3.12"
+            toxenv: py312-dj60
+            opensearch: "3.8.0"
+          - name: "py313 dj61 os2.19.6"
+            python: "3.13"
+            toxenv: py313-dj61
+            opensearch: "2.19.6"
+          - name: "py314 dj60 os2.19.6"
+            python: "3.14"
+            toxenv: py314-dj60
+            opensearch: "2.19.6"
+          - name: "py314 dj61 os3.8.0 (ceiling)"
+            python: "3.14"
+            toxenv: py314-dj61
+            opensearch: "3.8.0"
+    env:
+      OPENSEARCH_URL: http://127.0.0.1:9200
+      OPENSEARCH_SERVER: ${{ matrix.opensearch }}
+      # Turns "the cluster was unreachable" from a silent skip of every
+      # integration test into a hard failure.
+      OPENSEARCH_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A `services:` block starts before the first step, which leaves no way to
+      # raise vm.max_map_count or mount a config first, so the server is started
+      # explicitly instead. The readiness loop ends by asserting the version the
+      # cluster reports, so a job can never quietly test the wrong server.
+      - name: Start OpenSearch ${{ matrix.opensearch }}
+        run: |
+          set -euo pipefail
+          sudo sysctl -w vm.max_map_count=262144
+          docker run -d --name opensearch \
+            -p 9200:9200 \
+            -e discovery.type=single-node \
+            -e "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g" \
+            -e DISABLE_INSTALL_DEMO_CONFIG=true \
+            -e "plugins.security.disabled=true" \
+            --ulimit nofile=65536:65536 \
+            "opensearchproject/opensearch:${{ matrix.opensearch }}"
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null 2>&1; then break; fi
+            sleep 5
+          done
+          curl -fsS http://127.0.0.1:9200 | tee /dev/stderr \
+            | grep -q '"number"[[:space:]]*:[[:space:]]*"${{ matrix.opensearch }}"'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      # Runs both signal processors; see the commands in tox.ini.
+      - name: Run ${{ matrix.toxenv }}
+        run: uv run --frozen --no-default-groups --group tox tox run -e ${{ matrix.toxenv }}
+
+      - name: OpenSearch logs
+        if: failure()
+        run: docker logs opensearch
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage-${{ matrix.toxenv }}-os${{ matrix.opensearch }}
+          path: .coverage.*
+          # coverage data files are dotfiles, which this action skips by
+          # default -- without this the upload silently contains nothing.
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: error
+
+  coverage:
+    name: coverage
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      # Writing the badge and coverage data to the orphan
+      # python-coverage-comment-action-data branch on pushes to master (v4
+      # keeps them there, not in the wiki, which is disabled on this repo), and
+      # commenting on same-repository pull requests. Pull requests from forks
+      # cannot get a write token at all; for those the action writes an
+      # artifact instead and coverage-comment.yml posts it.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      # One combined report for the whole matrix, rather than the previous
+      # arrangement where every one of 64 matrix jobs posted its own partial
+      # comment.
+      - name: Combine and report
+        run: uv run --frozen --no-default-groups --group tox tox run -e coverage
+
+      - name: Coverage comment
+        id: coverage_comment
+        uses: py-cov-action/python-coverage-comment-action@a05be3d2e8a6272d3ef5fb2840ab20368bb2eb71 # v4.3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 90
+          MINIMUM_ORANGE: 75
+
+      - name: Store the comment for the fork-pull-request companion workflow
+        if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage.xml

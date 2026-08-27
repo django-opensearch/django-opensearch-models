@@ -1,0 +1,40 @@
+name: Post coverage comment
+
+# A pull request from a fork runs with a read-only token, so the CI run cannot
+# comment on it. In that case the coverage job uploads the rendered comment as
+# an artifact and this workflow -- which runs in the context of the base
+# repository, and therefore has a write token, but never checks out or executes
+# the contributor's code -- posts it.
+
+# zizmor flags workflow_run as dangerous because it grants a write token to a
+# run triggered by untrusted code. The danger is in checking that code out or
+# executing it; this workflow does neither. It has no checkout step, runs a
+# single pinned action, and passes only a run id. Coverage data is read from
+# that run's artifacts, never executed.
+on:  # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  post:
+    name: post
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      pull-requests: write
+      actions: read
+      contents: read
+    steps:
+      - uses: py-cov-action/python-coverage-comment-action@a05be3d2e8a6272d3ef5fb2840ab20368bb2eb71 # v4.3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PR_RUN_ID: ${{ github.event.workflow_run.id }}
