@@ -1,0 +1,256 @@
+[project]
+name = "django-opensearch-models"
+version = "1.1.0"
+description = "Wrapper around opensearch-py for Django models"
+readme = "README.md"
+# Django 6.0 and 6.1 both require Python >=3.12. Setting the floor there as well
+# means every python x django pair in the support matrix is valid, so neither
+# tox.ini nor the CI matrix needs exclusions. See .github/workflows/ci.yml.
+requires-python = ">=3.12"
+# PEP 639 license expression. This and a `License ::` classifier are mutually
+# exclusive, hence no classifier here. NOTICE carries the attribution the
+# Apache-2.0 terms require to be retained; it ships in the sdist.
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    { name = "Alex Coates", email = "mizi@mizi.ws" }
+]
+keywords = ["django", "opensearch", "opensearch-py", "search", "index", "full-text-search"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "django>=5.2",
+    # The floor stays at 3.0 rather than 3.2 deliberately: 3.2 hard-pins
+    # opensearch-protobufs==1.2.0, and forcing an exact transitive pin on every
+    # consumer is a poor trade for a fix they get anyway via the lockfile. The
+    # `lowest` tox environment proves the floor still works.
+    "opensearch-py>=3.0,<4",
+]
+
+[project.urls]
+Homepage = "https://github.com/django-opensearch/django-opensearch-models"
+Repository = "https://github.com/django-opensearch/django-opensearch-models"
+Documentation = "https://django-opensearch-models.readthedocs.io/en/latest/"
+Changelog = "https://github.com/django-opensearch/django-opensearch-models/blob/master/CHANGELOG.md"
+Issues = "https://github.com/django-opensearch/django-opensearch-models/issues"
+
+[project.optional-dependencies]
+celery = [
+    "celery>=5.5.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.11.0"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = "django_opensearch_models"
+# NOTE: patterns use gitignore semantics. A pattern containing a slash is
+# anchored to the project root; a BARE NAME matches at any depth. That is how
+# 1.0.0 shipped broken: `source-exclude = ["test", "test/**"]` was aimed at the
+# top-level `tests/` directory, but `test` also matched the package's own
+# `src/django_opensearch_models/test/` and stripped the public `OSTestCase` /
+# `is_os_online` helpers from both the sdist and the wheel. Always include a
+# slash so the pattern is root-anchored. A LEADING slash does not work here --
+# these are relative patterns, so write `tests/**`, not `/tests/**`.
+source-include = [
+    "tests/**",
+    "runtests.py",
+    "tox.ini",
+    "NOTICE",
+]
+source-exclude = [
+    "tests/**/__pycache__/**",
+    "**/*.pyc",
+    "**/*.sqlite3",
+]
+
+[tool.ruff]
+line-length = 120
+preview = true
+# target-version is intentionally omitted so ruff infers it from
+# project.requires-python and the two cannot drift apart.
+src = ["src", "tests"]
+lint.select = ["ALL"]
+# Written as rule names rather than codes, which ruff now prefers and which
+# makes this list readable without a lookup table. Whole-linter prefixes (C90,
+# CPY, PT, SLF) have no single name and stay as codes.
+lint.ignore = [
+    # Conflict with the ruff formatter.
+    "missing-trailing-comma",
+    "single-line-implicit-string-concatenation",
+
+    "C90",  # mccabe complexity
+    "CPY",  # copyright notices
+    "PT",   # pytest style; this project uses unittest
+    "SLF",  # private member access, which the registry and _meta work needs
+
+    "boolean-default-value-positional-argument",
+    "unused-function-argument",
+    "unused-method-argument",
+
+    # Django and opensearch-py naming conventions.
+    "invalid-class-name",
+    "invalid-function-name",
+    "invalid-argument-name",
+    "invalid-first-argument-name-for-method",
+    "non-lowercase-variable-in-function",
+    "error-suffix-on-exception-name",
+    "mutable-class-default",
+
+    # Size and complexity limits.
+    "too-many-public-methods",
+    "too-many-arguments",
+    "too-many-statements",
+    "too-many-branches",
+    "too-many-return-statements",
+    "too-many-locals",
+    "too-many-positional-arguments",
+    "too-many-nested-blocks",
+    "no-self-use",
+
+    # The package is currently untyped; see the note in README.
+    "missing-type-function-argument",
+    "missing-type-args",
+    "missing-type-kwargs",
+    "missing-return-type-undocumented-public-function",
+    "missing-return-type-private-function",
+    "missing-return-type-special-method",
+    "missing-return-type-static-method",
+    "missing-return-type-class-method",
+
+    # Docstrings are required where they earn their place, not everywhere.
+    "undocumented-public-module",
+    "undocumented-public-class",
+    "undocumented-public-method",
+    "undocumented-public-function",
+    "undocumented-public-package",
+    "undocumented-magic-method",
+    "undocumented-public-nested-class",
+    "undocumented-public-init",
+    "docstring-missing-returns",
+    "docstring-missing-yields",
+    "docstring-missing-exception",
+    # Mutually exclusive with incorrect-blank-line-after-class / docstring
+    # summary placement; pick one of each pair.
+    "incorrect-blank-line-before-class",
+    "multi-line-summary-first-line",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The package __init__ deliberately does work: it re-exports the field classes,
+# derives __version__ and defines autodiscover(). tests/__init__.py is an empty
+# app package that Django requires.
+"**/__init__.py" = ["non-empty-init-module"]
+"tests/**" = [
+    "assert",
+    "hardcoded-password-string",
+    "hardcoded-password-func-arg",
+    "implicit-namespace-package",
+    "commented-out-code",
+]
+"runtests.py" = ["implicit-namespace-package"]
+".github/scripts/**" = ["implicit-namespace-package"]
+"docs/source/conf.py" = ["implicit-namespace-package", "commented-out-code", "builtin-variable-shadowing"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["django_opensearch_models", "tests"]
+
+[tool.coverage.run]
+source_pkgs = ["django_opensearch_models"]
+branch = true
+# Each tox env and each signal-processor run writes its own data file, so the
+# results can be combined across the whole matrix instead of overwriting.
+parallel = true
+relative_files = true
+omit = [
+    "*/migrations/*",
+    "*/__main__.py",
+]
+
+[tool.coverage.paths]
+# Map the src layout, an installed copy and a tox-installed copy onto one tree,
+# so `coverage combine` across environments produces a single report.
+source = [
+    "src/django_opensearch_models",
+    "*/site-packages/django_opensearch_models",
+    ".tox/*/lib/python*/site-packages/django_opensearch_models",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+# Ratcheted up as coverage improves; never lower it to make a red build green.
+# The combined run is at 87.69%.
+fail_under = 85
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[dependency-groups]
+# Split so tox can install only what an environment actually needs, rather than
+# dragging sphinx, ruff and tox into all nine test envs.
+test = [
+    "celery>=5.6.3",
+    "coverage>=7.15.4",
+    "django>=5.2",
+    "pillow>=11.3.0",
+]
+lint = [
+    # Pinned exactly, not floored: ruff's `select = ["ALL"]` plus `preview = true`
+    # opts into every new and preview rule, so a floating version means a lint
+    # run can start failing on a day nobody touched the code.
+    "ruff==0.16.3",
+]
+typing = [
+    "celery-types>=0.23.0",
+]
+docs = [
+    "sphinx>=9.1.0",
+    # The theme. Responsive, dark mode, and a sidebar that copes with more than
+    # a handful of pages.
+    "furo>=2025.9.25",
+    # Lets new pages be written in Markdown without converting the existing
+    # reStructuredText. Both suffixes build side by side.
+    "myst-parser>=4.0.1",
+    "sphinx-copybutton>=0.5.2",
+    # Cards, grids and synchronised tabs -- used for the landing page and the
+    # per-installer instructions.
+    "sphinx-design>=0.6.1",
+]
+tox = [
+    "tox>=4.60.0",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "typing" },
+    { include-group = "docs" },
+    { include-group = "tox" },
+]

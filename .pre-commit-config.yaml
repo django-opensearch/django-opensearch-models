@@ -1,0 +1,49 @@
+---
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: check-case-conflict
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        args:
+          - --maxkb=100
+        exclude: "uv.lock"
+      - id: name-tests-test
+        args: [--django]
+        # tests/ also holds the Django app the suite runs against -- models,
+        # documents and the fixtures that build them. They are support modules,
+        # not test modules, so the test*.py naming rule does not apply and the
+        # hook can never pass while one of them is staged.
+        exclude: ^tests/(__init__|documents|fixtures|models)\.py$
+
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: forbid-crlf
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Kept equal to the ruff pinned in the lint dependency group, so the hook
+    # and CI cannot disagree about what a lint failure is.
+    rev: v0.16.3
+    hooks:
+      # `ruff` is only a legacy alias for this at the pinned rev.
+      - id: ruff-check
+        args: [ --fix ]
+      - id: ruff-format
+        args: [ "--config", "pyproject.toml" ]

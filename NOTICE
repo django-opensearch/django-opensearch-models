@@ -1,0 +1,15 @@
+django-opensearch-models
+Copyright 2026 django-opensearch contributors
+
+Portions of this software are derived from django-elasticsearch-dsl, licensed
+under the Apache License, Version 2.0. Those portions have been modified.
+
+  Copyright 2016 Sabre
+
+Attribution notices retained from that work:
+
+  sabricot
+  safwanrahman - Safwan Rahman
+  markotibold
+  HansAdema - Devhouse Spindle
+  barseghyanartur

@@ -1,0 +1,8 @@
+# Your app requirements.
+-r ../requirements_test.txt
+# Your app in editable mode.
+-e ../
+
+django-autofixture==0.12.1
+Pillow==6.2.2
+django==4.1.2
