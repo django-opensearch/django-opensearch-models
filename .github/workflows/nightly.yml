@@ -1,0 +1,205 @@
+name: Nightly
+
+# ci.yml runs a representative six-leg slice on every pull request. This runs
+# the parts that are too slow or too situational for that, and which would
+# otherwise never be covered:
+#
+#   * the full python x django x server cross product
+#   * the declared dependency floors, which a lockfile-driven run never exercises
+#   * a cluster with the security plugin enabled, which is the only place the
+#     http_auth path in runtests.py is exercised at all
+#
+# It also runs with deprecation warnings promoted to errors, so a future Django
+# or opensearch-py release announces itself here rather than in a release.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.28"
+  UV_FROZEN: "1"
+  FORCE_COLOR: "1"
+
+jobs:
+  full-matrix:
+    name: py${{ matrix.python }} dj${{ matrix.django }} os${{ matrix.opensearch }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+        django: ["52", "60", "61"]
+        opensearch: ["2.19.6", "3.8.0"]
+        # No `exclude:` is needed. requires-python is >=3.12 and Django 6.x
+        # requires >=3.12, so all eighteen cells of this product are valid.
+    env:
+      OPENSEARCH_URL: http://127.0.0.1:9200
+      OPENSEARCH_SERVER: ${{ matrix.opensearch }}
+      OPENSEARCH_REQUIRED: "1"
+      # Surface removals before they ship. Django's own deprecations are the
+      # ones that matter here; everything else stays a warning so a noisy
+      # dependency cannot fail the run on its own.
+      PYTHONWARNINGS: "error::DeprecationWarning:django,default"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start OpenSearch ${{ matrix.opensearch }}
+        run: |
+          set -euo pipefail
+          sudo sysctl -w vm.max_map_count=262144
+          docker run -d --name opensearch \
+            -p 9200:9200 \
+            -e discovery.type=single-node \
+            -e "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g" \
+            -e DISABLE_INSTALL_DEMO_CONFIG=true \
+            -e "plugins.security.disabled=true" \
+            --ulimit nofile=65536:65536 \
+            "opensearchproject/opensearch:${{ matrix.opensearch }}"
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null 2>&1; then break; fi
+            sleep 5
+          done
+          curl -fsS http://127.0.0.1:9200 | tee /dev/stderr \
+            | grep -q '"number"[[:space:]]*:[[:space:]]*"${{ matrix.opensearch }}"'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Run the matching tox environment
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+          DJANGO_FACTOR: ${{ matrix.django }}
+        run: |
+          set -euo pipefail
+          toxenv="py${PYTHON_VERSION//./}-dj${DJANGO_FACTOR}"
+          echo "Running $toxenv"
+          uv run --frozen --no-default-groups --group tox tox run -e "$toxenv"
+
+      - name: OpenSearch logs
+        if: failure()
+        run: docker logs opensearch
+
+  lowest-direct:
+    name: declared dependency floors
+    runs-on: ubuntu-24.04
+    env:
+      OPENSEARCH_URL: http://127.0.0.1:9200
+      OPENSEARCH_SERVER: "2.19.6"
+      OPENSEARCH_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start OpenSearch
+        run: |
+          set -euo pipefail
+          sudo sysctl -w vm.max_map_count=262144
+          docker run -d --name opensearch -p 9200:9200 \
+            -e discovery.type=single-node \
+            -e "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g" \
+            -e DISABLE_INSTALL_DEMO_CONFIG=true \
+            -e "plugins.security.disabled=true" \
+            --ulimit nofile=65536:65536 \
+            opensearchproject/opensearch:2.19.6
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null 2>&1; then break; fi
+            sleep 5
+          done
+          curl -fsS http://127.0.0.1:9200 | grep -q '"number"[[:space:]]*:[[:space:]]*"2.19.6"'
+
+      # `lowest` pins base_python, because resolving the floor is the point.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      # Everything else installs from uv.lock, which resolves the newest
+      # compatible versions. This is the only job that proves the *declared*
+      # floors (django>=5.2, opensearch-py>=3.0) actually work, rather than
+      # being an untested claim in pyproject.toml.
+      - run: uv run --frozen --no-default-groups --group tox tox run -e lowest
+
+      - name: OpenSearch logs
+        if: failure()
+        run: docker logs opensearch
+
+  secured-cluster:
+    name: security plugin enabled
+    runs-on: ubuntu-24.04
+    env:
+      OPENSEARCH_URL: https://127.0.0.1:9200
+      OPENSEARCH_USERNAME: admin
+      OPENSEARCH_VERIFY_CERTS: "0"
+      OPENSEARCH_SERVER: "3.8.0"
+      OPENSEARCH_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Generated per run rather than stored as a secret: it guards a throwaway
+      # container that exists for the length of this job and is never reachable
+      # from outside the runner. Keeping it out of the repository settings means
+      # there is no shared credential to rotate or leak.
+      - name: Generate a cluster password
+        run: |
+          set -euo pipefail
+          printf 'OPENSEARCH_PASSWORD=%s\n' "$(openssl rand -base64 24)Aa1!" >> "$GITHUB_ENV"
+
+      - name: Start OpenSearch 3.8.0 with security enabled
+        run: |
+          set -euo pipefail
+          sudo sysctl -w vm.max_map_count=262144
+          docker run -d --name opensearch -p 9200:9200 \
+            -e discovery.type=single-node \
+            -e "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g" \
+            -e "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}" \
+            --ulimit nofile=65536:65536 \
+            opensearchproject/opensearch:3.8.0
+          for _ in $(seq 1 60); do
+            if curl -fsSk -u "admin:${OPENSEARCH_PASSWORD}" \
+                 https://127.0.0.1:9200/_cluster/health >/dev/null 2>&1; then break; fi
+            sleep 5
+          done
+          curl -fsSk -u "admin:${OPENSEARCH_PASSWORD}" https://127.0.0.1:9200 \
+            | grep -q '"number"[[:space:]]*:[[:space:]]*"3.8.0"'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      # The only job that authenticates. opensearch-py silently drops unknown
+      # kwargs, so a misnamed credentials key yields an unauthenticated client:
+      # every integration test skips itself and the build stays green. Nothing
+      # but a run against a secured cluster can catch that.
+      - run: uv run --frozen --no-default-groups --group tox tox run -e py314-dj61
+
+      - name: OpenSearch logs
+        if: failure()
+        run: docker logs opensearch
