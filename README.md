@@ -16,10 +16,10 @@
 | src/django\_opensearch\_models/models.py                            |        0 |        0 |        0 |        0 |    100.00% |           |
 | src/django\_opensearch\_models/registries.py                        |      100 |       10 |       44 |        5 |     89.58% |39-40, 47-48, 94, 100-101, 109, 115-116, 118-\>111 |
 | src/django\_opensearch\_models/search.py                            |       30 |        0 |        6 |        2 |     94.44% |24-\>29, 32-\>36 |
-| src/django\_opensearch\_models/signals.py                           |       82 |        9 |       16 |        5 |     85.71% |95-98, 103-104, 132-\>exit, 141-\>exit, 154-155, 180-\>exit, 189-\>exit, 198 |
+| src/django\_opensearch\_models/signals.py                           |       94 |       10 |       18 |        4 |     87.50% |99-102, 107-108, 144-\>exit, 153-\>exit, 166-167, 170-171, 192-\>exit, 201-\>exit |
 | src/django\_opensearch\_models/test/\_\_init\_\_.py                 |        2 |        0 |        0 |        0 |    100.00% |           |
 | src/django\_opensearch\_models/test/testcases.py                    |       26 |        0 |        8 |        0 |    100.00% |           |
-| **TOTAL**                                                           |  **679** |   **62** |  **222** |   **27** | **87.68%** |           |
+| **TOTAL**                                                           |  **691** |   **63** |  **224** |   **26** | **87.87%** |           |
 
 
 ## Setup coverage badge
