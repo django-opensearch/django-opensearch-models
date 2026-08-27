@@ -1,8 +1,12 @@
 """A convenient way to attach django-opensearch-models to Django's signals and cause things to index."""
 
+from functools import partial
+from http import HTTPStatus
+
 from django.apps import apps
-from django.db import models
+from django.db import connection, models, transaction
 from django.dispatch import Signal
+from opensearchpy.helpers.errors import BulkIndexError
 
 from .registries import registry
 
@@ -118,9 +122,17 @@ else:
             Given an individual model instance, update the object in the index.
             Update the related objects as well.
 
+            ``post_save`` fires before an enclosing transaction commits. Enqueuing the task immediately lets a
+            worker pick it up and read the row on another connection before it is visible there, so the index
+            update silently applies stale (or missing) data. Inside an atomic block, defer enqueuing to
+            ``transaction.on_commit`` so the task never runs ahead of the transaction it depends on.
             """
             if self.is_instance_indexed(instance):
-                self.save.delay(*self.serialize_instance(instance))
+                dispatch = partial(self.save.delay, *self.serialize_instance(instance))
+                if connection.in_atomic_block:
+                    transaction.on_commit(dispatch)
+                else:
+                    dispatch()
 
         def handle_pre_delete(self, sender, instance, **kwargs):
             """
@@ -192,7 +204,26 @@ else:
         @staticmethod
         @shared_task()
         def delete(app_label, model_name, pk):
-            """Delete the document from the registry as a Celery task."""
-            instance = CelerySignalProcessor.deserialize_instance(app_label, model_name, pk)
-            if instance:
-                registry.delete(instance)
+            """
+            Delete the document from the registry as a Celery task.
+
+            By the time a worker picks up a delete task, the row is already gone, so unlike ``save``/
+            ``delete_related`` this deliberately does not deserialize the instance from the database.
+            ``registry.delete`` only needs the document id, and ``Document.generate_id`` derives that from the
+            instance's pk alone, so an unsaved instance carrying just the pk is enough.
+
+            Celery's at-least-once delivery means the same delete can be dispatched twice, and the document may
+            already be gone by the second attempt -- that specific 404 is expected and swallowed. Any other
+            bulk error is re-raised, same as an unhandled error from ``save``/``delete_related`` would be, so
+            it surfaces through Celery's own task failure/retry handling instead of disappearing into a log
+            line that may not be routed anywhere.
+            """
+            try:
+                model = apps.get_model(app_label, model_name)
+            except LookupError:
+                return
+            try:
+                registry.delete(model(pk=pk))
+            except BulkIndexError as exc:
+                if not all(error.get("delete", {}).get("status") == HTTPStatus.NOT_FOUND for error in exc.errors):
+                    raise
