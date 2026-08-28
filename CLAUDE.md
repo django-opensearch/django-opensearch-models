@@ -5,6 +5,8 @@ the index mapping, populates it, and keeps it in sync through Django's signals.
 
 ## Rules
 
+- [Every change starts with a failing test](.claude/rules/tdd.md) — red, green; never write
+  production code before a test that demands it.
 - [Comments describe the present](.claude/rules/comments.md) — no comment, docstring or test name
   explains what the code used to do.
 - [Documentation must track the API](.claude/rules/documentation.md) — any public-API change updates
