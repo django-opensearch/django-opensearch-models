@@ -198,16 +198,39 @@ jobs:
           api="https://readthedocs.org/api/v3/projects/${RTD_PROJECT}"
           auth="Authorization: Token ${RTD_TOKEN}"
 
+          # An unset secret reaches the API as an empty token, and every call
+          # then fails in a way that is indistinguishable from the version not
+          # existing yet. Say so up front rather than after a retry loop.
+          if [ -z "${RTD_TOKEN}" ]; then
+            echo "::error::READTHEDOCS_TOKEN is empty. Set the repository secret:"
+            echo "::error::  gh secret set READTHEDOCS_TOKEN --repo ${GITHUB_REPOSITORY} --body '<token>'"
+            exit 1
+          fi
+
           # The tag reaches Read the Docs through its own webhook, which may not
-          # have fired yet when this job starts.
+          # have fired yet when this job starts. Only a 404 is worth waiting on;
+          # anything else is a fault that more waiting will not resolve.
           for attempt in $(seq 1 30); do
             code="$(curl -sS -o /dev/null -w '%{http_code}' -H "$auth" "${api}/versions/${VERSION}/")"
-            [ "$code" = "200" ] && break
-            if [ "$attempt" = "30" ]; then
-              echo "::error::Read the Docs does not know about version ${VERSION} after 5 minutes."
-              echo "::error::Check that the repository webhook is connected."
-              exit 1
-            fi
+            case "$code" in
+              200) break ;;
+              401 | 403)
+                echo "::error::Read the Docs rejected the token (HTTP ${code})."
+                echo "::error::Check that READTHEDOCS_TOKEN is current and grants access to ${RTD_PROJECT}."
+                exit 1
+                ;;
+              404)
+                if [ "$attempt" = "30" ]; then
+                  echo "::error::Read the Docs does not know about version ${VERSION} after 5 minutes."
+                  echo "::error::Check that the repository webhook is connected and the project slug is ${RTD_PROJECT}."
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "::error::Unexpected HTTP ${code} from Read the Docs when looking up version ${VERSION}."
+                exit 1
+                ;;
+            esac
             sleep 10
           done
 
