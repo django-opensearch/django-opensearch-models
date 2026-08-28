@@ -12,7 +12,11 @@ Releases are published to PyPI and are also consumable by git tag. Tags are unpr
 
 ## [Unreleased]
 
-`1.1.0` — the first published release of django-opensearch-models.
+Nothing yet.
+
+## [1.1.0] - 2026-08-27
+
+The first published release of django-opensearch-models.
 
 ### Added
 
