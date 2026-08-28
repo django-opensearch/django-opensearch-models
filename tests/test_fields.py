@@ -10,19 +10,28 @@ from django_opensearch_models.fields import (
     ByteField,
     CompletionField,
     DateField,
+    DateRangeField,
     DoubleField,
+    DoubleRangeField,
     FileField,
     FloatField,
+    FloatRangeField,
     GeoPointField,
     GeoShapeField,
     IntegerField,
+    IntegerRangeField,
     IpField,
+    IpRangeField,
     KeywordField,
+    KnnVectorField,
     ListField,
     LongField,
+    LongRangeField,
     NestedField,
     ObjectField,
     OSField,
+    RankFeatureField,
+    RankFeaturesField,
     ScaledFloatField,
     ShortField,
     TextField,
@@ -74,6 +83,30 @@ class OSFieldTestCase(TestCase):
         instance = NonCallableMock(translation=_("foo"))
         self.assertIsInstance(field.get_value_from_instance(instance), str)
         self.assertEqual(field.get_value_from_instance(instance), "foo")
+
+    def test_type_error_from_a_property_is_not_silenced(self):
+        """
+        Let an exception from a property reach the caller.
+
+        A ``TypeError`` escaping a model property is a real defect in that property. Treating it as a
+        failed attribute lookup indexes the field as ``None`` and reports nothing.
+        """
+
+        class Thing:
+            @property
+            def broken(self):
+                msg = "unsupported operand type(s)"
+                raise TypeError(msg)
+
+        field = OSField(attr="broken")
+
+        with self.assertRaises(TypeError):
+            field.get_value_from_instance(Thing())
+
+    def test_missing_attribute_still_returns_none(self):
+        field = OSField(attr="absent")
+
+        self.assertIsNone(field.get_value_from_instance(NonCallableMock(spec=[])))
 
 
 class ObjectFieldTestCase(TestCase):
@@ -446,3 +479,82 @@ class KeywordFieldTestCase(TestCase):
             },
             field.to_dict(),
         )
+
+
+class KnnVectorFieldTestCase(TestCase):
+    def test_get_mapping(self):
+        field = KnnVectorField(dimension=3)
+
+        self.assertEqual({"type": "knn_vector", "dimension": 3}, field.to_dict())
+
+    def test_get_mapping_with_method(self):
+        field = KnnVectorField(dimension=2, space_type="cosinesimil")
+
+        self.assertEqual(
+            {"type": "knn_vector", "dimension": 2, "space_type": "cosinesimil"},
+            field.to_dict(),
+        )
+
+    def test_get_value_from_instance(self):
+        field = KnnVectorField(attr="embedding", dimension=3)
+
+        instance = NonCallableMock(embedding=[0.1, 0.2, 0.3])
+
+        self.assertEqual(field.get_value_from_instance(instance), [0.1, 0.2, 0.3])
+
+    def test_get_value_from_instance_none(self):
+        field = KnnVectorField(attr="embedding", dimension=3)
+
+        self.assertIsNone(field.get_value_from_instance(NonCallableMock(embedding=None)))
+
+
+class RankFeatureFieldTestCase(TestCase):
+    def test_get_mapping(self):
+        self.assertEqual({"type": "rank_feature"}, RankFeatureField().to_dict())
+
+    def test_get_value_from_instance(self):
+        field = RankFeatureField(attr="popularity")
+
+        self.assertEqual(field.get_value_from_instance(NonCallableMock(popularity=12.5)), 12.5)
+
+
+class RankFeaturesFieldTestCase(TestCase):
+    def test_get_mapping(self):
+        self.assertEqual({"type": "rank_features"}, RankFeaturesField().to_dict())
+
+    def test_get_value_from_instance(self):
+        field = RankFeaturesField(attr="topics")
+
+        instance = NonCallableMock(topics={"politics": 20, "sport": 3})
+
+        self.assertEqual(field.get_value_from_instance(instance), {"politics": 20, "sport": 3})
+
+
+class RangeFieldTestCase(TestCase):
+    """The range family differs only by mapping type, so the mappings are the whole contract."""
+
+    def test_get_mapping(self):
+        expected = {
+            IntegerRangeField: "integer_range",
+            FloatRangeField: "float_range",
+            LongRangeField: "long_range",
+            DoubleRangeField: "double_range",
+            DateRangeField: "date_range",
+            IpRangeField: "ip_range",
+        }
+
+        for field_class, mapping_type in expected.items():
+            with self.subTest(field=field_class.__name__):
+                self.assertEqual({"type": mapping_type}, field_class().to_dict())
+
+    def test_get_value_from_instance(self):
+        field = IntegerRangeField(attr="age_bracket")
+
+        instance = NonCallableMock(age_bracket={"gte": 18, "lt": 30})
+
+        self.assertEqual(field.get_value_from_instance(instance), {"gte": 18, "lt": 30})
+
+    def test_get_value_from_instance_none(self):
+        field = DateRangeField(attr="period")
+
+        self.assertIsNone(field.get_value_from_instance(NonCallableMock(period=None)))

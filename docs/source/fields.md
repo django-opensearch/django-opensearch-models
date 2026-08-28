@@ -34,6 +34,47 @@ Two behave specially:
 - `TimeField` is a `KeywordField` that serialises `datetime.time` values with `.isoformat()`.
   OpenSearch has no native time-of-day type.
 
+**Range fields**
+
+`IntegerRangeField`, `LongRangeField`, `FloatRangeField`, `DoubleRangeField`, `DateRangeField`,
+`IpRangeField`
+
+A range field holds an interval rather than a point, and its value is a mapping of range bounds:
+
+```python
+@registry.register_document
+class SubscriptionDocument(Document):
+    active_period = fields.DateRangeField(attr="active_period")
+    price_bracket = fields.DoubleRangeField()
+```
+
+The attribute must yield something like `{"gte": "2026-01-01", "lt": "2027-01-01"}`. No Django model
+field maps to a range type automatically — `django.contrib.postgres` range fields are not assumed,
+since the package is not a dependency here — so declare these explicitly rather than naming them in
+`Django.fields`.
+
+**Vector and relevance fields**
+
+`KnnVectorField(dimension, attr=None, **kwargs)` holds a dense vector for k-NN search. `dimension`
+is required and fixes the length of every vector stored in the field:
+
+```python
+embedding = fields.KnnVectorField(dimension=384, attr="embedding")
+```
+
+:::{important}
+An index containing a `KnnVectorField` must be created with k-NN enabled, or OpenSearch rejects the
+mapping outright:
+
+```python
+article_index = Index("articles")
+article_index.settings(number_of_shards=1, knn=True)
+```
+:::
+
+`RankFeatureField` stores a single numeric relevance boost, and `RankFeaturesField` a mapping of
+names to numeric boosts, for use with the `rank_feature` query.
+
 **Complex fields**
 
 `ObjectField(properties, attr=None, **kwargs)` and `NestedField(properties, attr=None, **kwargs)`,
@@ -48,6 +89,13 @@ to-many relationship as a flat list:
 ```python
 tags = fields.ListField(fields.KeywordField(attr="tag_names"))
 ```
+
+:::{warning}
+An exception raised inside a property or method that a field reads is not suppressed. If `attr`
+points at `Car.display_name` and that property raises, indexing fails with that error rather than
+writing the field as `null`. Only a genuinely absent attribute yields `null`, and only when the
+field is not `required`.
+:::
 
 ## How Django fields are mapped
 

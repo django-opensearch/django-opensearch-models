@@ -2,7 +2,7 @@ from collections import deque
 from fnmatch import fnmatch
 from functools import partial
 
-from django.db import models
+from django.db import models, transaction
 from opensearchpy import Document as OSDocument
 from opensearchpy.helpers import bulk, parallel_bulk
 
@@ -56,8 +56,11 @@ class Document(OSDocument):
 
     def __init__(self, related_instance_to_ignore=None, **kwargs):
         super().__init__(**kwargs)
-        self._related_instance_to_ignore = related_instance_to_ignore
-        self._prepared_fields = self.init_prepare()
+        # opensearch-py's AttrDict.__setattr__ diverts any name that is not already an attribute of
+        # the class into _d_, the document's field data, where to_dict() will serialize it. These two
+        # are bookkeeping for prepare(), not content, so they are set past that machinery.
+        object.__setattr__(self, "_related_instance_to_ignore", related_instance_to_ignore)
+        object.__setattr__(self, "_prepared_fields", self.init_prepare())
 
     def __eq__(self, other):
         return id(self) == id(other)
@@ -87,12 +90,25 @@ class Document(OSDocument):
         return self.django.model._default_manager.all()
 
     def get_indexing_queryset(self):
-        """Build queryset (iterator) for use by indexing."""
+        """
+        Build queryset (iterator) for use by indexing.
+
+        The rows are drawn inside an atomic block. Outside one, PostgreSQL declares the server-side
+        cursor behind ``iterator()`` as ``WITH HOLD``, which materialises the entire result set into
+        temporary storage before the first row is returned. A queryset is lazy, so wrapping only its
+        construction would achieve nothing -- the iteration itself has to happen inside the block,
+        which is what the generator is for.
+        """
         qs = self.get_queryset()
         kwargs = {}
         if self.django.queryset_pagination:
             kwargs = {"chunk_size": self.django.queryset_pagination}
-        return qs.iterator(**kwargs)
+
+        def rows():
+            with transaction.atomic(savepoint=False):
+                yield from qs.iterator(**kwargs)
+
+        return rows()
 
     def init_prepare(self):
         """
@@ -150,16 +166,20 @@ class Document(OSDocument):
             msg = f"Cannot convert model field {field_name} to an OpenSearch field!"
             raise ModelFieldNotMappedError(msg) from e
 
+    def _with_chunk_size(self, kwargs):
+        """Size the bulk request from ``queryset_pagination`` unless the caller picked a size."""
+        if self.django.queryset_pagination and "chunk_size" not in kwargs:
+            kwargs["chunk_size"] = self.django.queryset_pagination
+        return kwargs
+
     def bulk(self, actions, **kwargs):
-        response = bulk(client=self._get_connection(), actions=actions, **kwargs)
+        response = bulk(client=self._get_connection(), actions=actions, **self._with_chunk_size(kwargs))
         # send post index signal
         post_index.send(sender=self.__class__, instance=self, actions=actions, response=response)
         return response
 
     def parallel_bulk(self, actions, **kwargs):
-        if self.django.queryset_pagination and "chunk_size" not in kwargs:
-            kwargs["chunk_size"] = self.django.queryset_pagination
-        bulk_actions = parallel_bulk(client=self._get_connection(), actions=actions, **kwargs)
+        bulk_actions = parallel_bulk(client=self._get_connection(), actions=actions, **self._with_chunk_size(kwargs))
         # As the `parallel_bulk` is lazy, we need to get it into `deque` to run it instantly
         # See https://discuss.elastic.co/t/helpers-parallel-bulk-in-python-not-working/39498/2
         deque(bulk_actions, maxlen=0)

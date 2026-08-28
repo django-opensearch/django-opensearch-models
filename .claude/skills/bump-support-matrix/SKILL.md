@@ -74,9 +74,11 @@ lockfile. If you raise or lower a floor in `dependencies`, run it:
 uv run --frozen --no-default-groups --group tox tox run -e lowest
 ```
 
-Prefer a permissive floor over a defensive one. `opensearch-py` is floored at `>=3.0` rather than
-`>=3.2` deliberately: 3.2 hard-pins `opensearch-protobufs==1.2.0`, and forcing an exact transitive
-pin on every consumer is a poor trade when the lockfile resolves 3.2 anyway.
+Prefer a permissive floor over a defensive one, but only as far as the API allows. `opensearch-py`
+is floored at `>=3.1` because that is where the k-NN vector DSL field became `KnnVector`, mapping to
+`knn_vector`; the 3.0 spelling `DenseVector` maps to `dense_vector`, a type OpenSearch has no handler
+for. The floor stops short of `>=3.2`, which hard-pins `opensearch-protobufs==1.2.0`: forcing an
+exact transitive pin on every consumer is a poor trade when the lockfile resolves 3.2 anyway.
 
 ## Verify
 

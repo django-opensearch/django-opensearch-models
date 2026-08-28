@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -210,6 +212,18 @@ class Command(BaseCommand):
                 for index in old_indices:
                     self.stdout.write(f"Deleted index '{index}'")
 
+    def _delete_unaliased_indices(self, models):
+        """
+        Drop the freshly created indices of an aborted aliased rebuild.
+
+        The failure may have come before some of them were created, so a missing index is not an
+        error here -- but it is also not something to report as deleted.
+        """
+        for index in registry.get_indices(models):
+            response = index.delete(ignore=HTTPStatus.NOT_FOUND)
+            if response.get("acknowledged"):
+                self.stdout.write(f"Deleted index '{index._name}'")
+
     def _rebuild(self, models, aliases, options):
         if not options["use_alias"] and not self._delete(models, aliases, options):
             return
@@ -228,8 +242,15 @@ class Command(BaseCommand):
                 alias_index_pairs.append({"alias": index._name, "index": new_index})
                 index._name = new_index
 
-        self._create(models, aliases, options)
-        self._populate(models, options)
+        try:
+            self._create(models, aliases, options)
+            self._populate(models, options)
+        except Exception:
+            # Until the alias is moved onto it, the suffixed index is referenced by nothing and its
+            # name is never derived again, so a failure here would strand it in the cluster for good.
+            if options["use_alias"]:
+                self._delete_unaliased_indices(models)
+            raise
 
         if options["use_alias"]:
             for alias_index_pair in alias_index_pairs:

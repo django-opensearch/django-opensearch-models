@@ -80,7 +80,8 @@ Describes which model feeds the index, and how.
 `queryset_pagination`
 : Chunk size used when iterating the model during population. Without it the database driver's
   default applies, which for large tables can mean loading far more rows into memory at once than
-  you want.
+  you want. The same value sizes the bulk requests sent to OpenSearch, on both the serial and the
+  `--parallel` path.
 
 ## Computed and derived values
 
@@ -145,6 +146,14 @@ Every one of these is a method on your `Document` subclass.
   def get_queryset(self):
       return super().get_queryset().select_related("manufacturer")
   ```
+
+`get_indexing_queryset(self)`
+: The iterator of instances used to populate the index, built from `get_queryset()` and chunked by
+  `queryset_pagination`. The rows are drawn inside a transaction, because outside one PostgreSQL
+  serves the underlying server-side cursor as `WITH HOLD` and materialises the whole result set to
+  temporary storage before returning the first row. Override it only if you need a different
+  traversal; if you do, keep the iteration itself inside the transaction, since a queryset is lazy
+  and wrapping only its construction has no effect.
 
 `should_index_object(self, obj)`
 : Called per object during indexing; return `False` to skip it. Returns `True` by default. This is

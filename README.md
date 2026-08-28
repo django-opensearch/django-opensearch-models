@@ -38,7 +38,7 @@ real Django querysets when you need them.
 | --- | --- |
 | Python | 3.12, 3.13, 3.14 |
 | Django | 5.2, 6.0, 6.1 |
-| [opensearch-py](https://github.com/opensearch-project/opensearch-py) | 3.x |
+| [opensearch-py](https://github.com/opensearch-project/opensearch-py) | 3.1+ |
 | OpenSearch server | 2.19, 3.8 |
 
 Every combination in that table is exercised nightly against a real OpenSearch cluster, under both
