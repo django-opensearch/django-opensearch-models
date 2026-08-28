@@ -1,11 +1,11 @@
 # django-opensearch-models
 
-[![CI](https://github.com/django-opensearch/django-opensearch-models/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/django-opensearch/django-opensearch-models/actions/workflows/ci.yml)
+[![CI](https://github.com/django-opensearch/django-opensearch-models/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/django-opensearch/django-opensearch-models/actions/workflows/ci.yml)
 [![Coverage](https://raw.githubusercontent.com/django-opensearch/django-opensearch-models/python-coverage-comment-action-data/badge.svg)](https://github.com/django-opensearch/django-opensearch-models/tree/python-coverage-comment-action-data)
 [![PyPI](https://img.shields.io/pypi/v/django-opensearch-models?label=pypi)](https://pypi.org/project/django-opensearch-models/)
-[![Python](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdjango-opensearch%2Fdjango-opensearch-models%2Fmaster%2Fpyproject.toml&query=%24.project.requires-python&label=python)](https://github.com/django-opensearch/django-opensearch-models/blob/master/pyproject.toml)
+[![Python](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdjango-opensearch%2Fdjango-opensearch-models%2Fmain%2Fpyproject.toml&query=%24.project.requires-python&label=python)](https://github.com/django-opensearch/django-opensearch-models/blob/main/pyproject.toml)
 [![Docs](https://readthedocs.org/projects/django-opensearch-models/badge/?version=latest)](https://django-opensearch-models.readthedocs.io/en/latest/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/django-opensearch/django-opensearch-models/blob/master/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/django-opensearch/django-opensearch-models/blob/main/LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 <!-- overview-start -->
@@ -135,5 +135,5 @@ for how to run the test suite against a throwaway OpenSearch container.
 ## License
 
 Apache-2.0. See
-[LICENSE](https://github.com/django-opensearch/django-opensearch-models/blob/master/LICENSE) and
-[NOTICE](https://github.com/django-opensearch/django-opensearch-models/blob/master/NOTICE).
+[LICENSE](https://github.com/django-opensearch/django-opensearch-models/blob/main/LICENSE) and
+[NOTICE](https://github.com/django-opensearch/django-opensearch-models/blob/main/NOTICE).

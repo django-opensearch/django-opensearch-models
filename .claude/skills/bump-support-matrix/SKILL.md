@@ -52,7 +52,7 @@ Dropping is breaking. Before you do it:
 
 1. Check what `python-services` runs — **both** `develop` and any long-lived release branch.
 2. Make sure a tag exists that still supports the version being dropped, so consumers have
-   something to pin before `master` moves past them.
+   something to pin before `main` moves past them.
 3. Use a `feat!:` commit with a `BREAKING CHANGE:` footer, and add a `### Changed` entry to
    `CHANGELOG.md` naming the tag to pin.
 

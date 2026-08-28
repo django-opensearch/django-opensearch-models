@@ -67,9 +67,9 @@ accumulated suffixes, recreate the container rather than debugging the test.
 ## Before believing a failure
 
 1. Is a second run using the same cluster?
-2. Is the failure also on `master`? Check with a worktree before assuming you caused it:
+2. Is the failure also on `main`? Check with a worktree before assuming you caused it:
    ```bash
-   git worktree add /tmp/wt-master master && cd /tmp/wt-master && uv sync --dev
+   git worktree add /tmp/wt-main main && cd /tmp/wt-main && uv sync --dev
    ```
 3. Are `OPENSEARCH_URL` / `OPENSEARCH_SERVER` / `OPENSEARCH_REQUIRED` actually exported? tox only
    forwards the variables named in `pass_env`.

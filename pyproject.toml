@@ -47,7 +47,7 @@ dependencies = [
 Homepage = "https://github.com/django-opensearch/django-opensearch-models"
 Repository = "https://github.com/django-opensearch/django-opensearch-models"
 Documentation = "https://django-opensearch-models.readthedocs.io/en/latest/"
-Changelog = "https://github.com/django-opensearch/django-opensearch-models/blob/master/CHANGELOG.md"
+Changelog = "https://github.com/django-opensearch/django-opensearch-models/blob/main/CHANGELOG.md"
 Issues = "https://github.com/django-opensearch/django-opensearch-models/issues"
 
 [project.optional-dependencies]
