@@ -12,15 +12,23 @@ the index mapping, populates it, and keeps it in sync through Django's signals.
 
 ## Skills
 
-Reach for these rather than improvising; each encodes something this repo got wrong before.
+Reach for these rather than improvising. Each one names the places that must change together,
+which is where this codebase is easiest to get wrong.
 
 | Skill | Use it when |
 | --- | --- |
 | `run-tests` | Running, debugging or adding tests. Covers the throwaway cluster and the `OPENSEARCH_REQUIRED` trap where a green run tests nothing. |
 | `docs` | Writing or changing documentation, or after any user-visible change. |
-| `release` | Cutting a release: version bump, changelog, tag, PyPI. |
+| `release` | Cutting a release: version bump, changelog, tag, and the PyPI, Read the Docs and GitHub release publishing that follows. |
 | `add-field-type` | Adding a field class. |
 | `bump-support-matrix` | Changing supported Python, Django, opensearch-py or server versions. |
+
+## Working on this repository
+
+`main` is the default branch and is protected: changes land through a pull request, which needs one
+approving review and a green `build and smoke-test artifacts` check. Branches must be up to date
+before merging, so a merge to `main` puts open pull requests behind and they need updating. Only
+squash merges are allowed, and the branch is deleted on merge.
 
 ## Layout
 

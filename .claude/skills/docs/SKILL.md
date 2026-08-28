@@ -63,6 +63,9 @@ uv run --frozen --no-default-groups --group tox tox run -e docs
 
 Warnings are errors, here and on Read the Docs. A broken cross-reference fails the build.
 
+The site publishes from `main` as `latest`, and the release workflow activates and builds each tag,
+so a released version gets its own URL without anyone touching Read the Docs.
+
 - Cross-document links to a heading containing backticks or underscores are fragile. Add an explicit
   target and use `{ref}`:
   ```markdown
