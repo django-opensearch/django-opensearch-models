@@ -13,7 +13,7 @@ name: Release
 on:
   push:
     tags:
-      # Unprefixed, matching the 1.0.0 tag. A `v` prefix will not trigger this.
+      # Tags are unprefixed. A `v` prefix will not trigger this workflow.
       - "[0-9]+.[0-9]+.[0-9]+*"
 
 permissions: {}
