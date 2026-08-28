@@ -243,16 +243,18 @@ jobs:
           echo "Read the Docs build ${build_id} triggered for ${VERSION}"
 
           # Poll to completion: a triggered build that fails is still a failed
-          # release, and nothing else would report it.
+          # release, and nothing else would report it. Build detail is nested
+          # under the project; there is no top-level /builds/<id>/ endpoint.
           for attempt in $(seq 1 60); do
-            state="$(curl -fsS -H "$auth" "https://readthedocs.org/api/v3/builds/${build_id}/" | jq -r '.state')"
+            build="$(curl -fsS -H "$auth" "${api}/builds/${build_id}/")"
+            state="$(printf '%s' "$build" | jq -r '.state')"
             if [ "$state" = "finished" ]; then
-              success="$(curl -fsS -H "$auth" "https://readthedocs.org/api/v3/builds/${build_id}/" | jq -r '.success')"
+              success="$(printf '%s' "$build" | jq -r '.success')"
               if [ "$success" = "true" ]; then
                 echo "Documentation published: https://${RTD_PROJECT}.readthedocs.io/en/${VERSION}/"
                 exit 0
               fi
-              echo "::error::Read the Docs build ${build_id} failed. See https://readthedocs.org/projects/${RTD_PROJECT}/builds/${build_id}/"
+              echo "::error::Read the Docs build ${build_id} failed. See https://app.readthedocs.org/projects/${RTD_PROJECT}/builds/${build_id}/"
               exit 1
             fi
             sleep 10
