@@ -11,8 +11,8 @@ getting the tag wrong is the one mistake with no clean recovery.
 
 ## The rule that matters
 
-**Tags are unprefixed.** `1.1.0`, never `v1.1.0`. The existing `1.0.0` tag, the consumer's pin and
-the `release.yml` trigger pattern all assume this. A `v`-prefixed tag will simply not trigger the
+**Tags are unprefixed.** `1.1.0`, never `v1.1.0`. The `release.yml` trigger pattern and the
+`pypi` environment's tag rule both assume it, and a `v`-prefixed tag simply does not trigger the
 release workflow.
 
 ## The version lives in exactly one place
@@ -61,6 +61,8 @@ the package does not actually have is worse than no version at all.
    - `pypi` uploads them to PyPI.
    - `github-release` creates the GitHub release **as a draft**, with that version's changelog
      section as the notes.
+   - `docs` runs after `pypi`, activates the tag on Read the Docs and builds it, polling the build
+     to completion so a documentation failure fails the release.
 
 7. **Publish the draft release by hand** once the `pypi` job is green. Releases page -> the draft ->
    *Publish release*. This is the last step; until you click it the release is unlisted, so a failed
@@ -73,20 +75,23 @@ token stored anywhere. The `pypi` job mints a short-lived token that PyPI accept
 repository, this workflow filename and the `pypi` GitHub environment. Renaming `release.yml` or the
 environment breaks publishing until the trusted-publisher entry on PyPI is updated to match.
 
-One-time setup, needed before the first release that should reach PyPI:
+The publisher is registered on PyPI against four values -- owner `django-opensearch`, repository
+`django-opensearch-models`, workflow `release.yml`, environment `pypi`. Change any of them and
+publishing stops until the entry on PyPI is updated to match. Renaming the repository does not
+break it, because PyPI matches on the repository *name*, not its numeric id.
 
-- On PyPI, under *Your projects -> Publishing* (the *pending publisher* form, since the project does
-  not exist there yet), register: owner `django-opensearch`, repository
-  `django-opensearch-models`, workflow `release.yml`, environment `pypi`.
-- On GitHub, Settings -> Environments -> New environment, named exactly `pypi`. Under *Deployment
-  branches and tags* choose "Selected branches and tags" and add a **tag** rule matching `*.*.*`, so
-  no branch push can ever reach the publish job. Required reviewers are optional -- the draft
-  release makes them redundant as a safety gate.
+The `pypi` environment restricts deployment to tags matching `[0-9]*.[0-9]*.[0-9]*`, so no branch
+push can reach the publish job.
 
-  That field takes a glob, **not** the regex-flavoured pattern in this workflow's `on: push: tags:`
-  trigger. `+` there is a literal plus, not a quantifier, so pasting the trigger's
-  `[0-9]+.[0-9]+.[0-9]+*` across matches nothing and silently blocks every release. The two
-  patterns are not meant to be kept in sync; `*.*.*` is the glob equivalent.
+:warning: **That field is a glob, not a regex.** `.` is already literal, so escaping it as `\.`
+matches a backslash; `+` is a literal plus, not a quantifier. Three patterns in this project look
+alike and are not:
+
+| Where | Syntax | Pattern |
+| --- | --- | --- |
+| `pypi` environment tag rule | glob | `[0-9]*.[0-9]*.[0-9]*` |
+| `release.yml` `on: push: tags:` | glob | `[0-9]+.[0-9]+.[0-9]+*` |
+| Read the Docs automation rule | **regex** | `^[0-9]+\.[0-9]+\.[0-9]+` |
 
 PyPI rejects a re-upload of a version that already exists. If the `pypi` job fails after a partially
 successful upload, cut a new patch version rather than trying to replace the files.
