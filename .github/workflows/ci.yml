@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -201,7 +201,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       # Writing the badge and coverage data to the orphan
-      # python-coverage-comment-action-data branch on pushes to master (v4
+      # python-coverage-comment-action-data branch on pushes to main (v4
       # keeps them there, not in the wiki, which is disabled on this repo), and
       # commenting on same-repository pull requests. Pull requests from forks
       # cannot get a write token at all; for those the action writes an

@@ -49,7 +49,7 @@ the package does not actually have is worse than no version at all.
 5. **Commit, tag, push:**
    ```bash
    git tag -a 1.1.0 -m "django-opensearch-models 1.1.0"
-   git push origin master
+   git push origin main
    git push origin 1.1.0
    ```
 
@@ -95,7 +95,7 @@ successful upload, cut a new patch version rather than trying to replace the fil
 
 A release that drops a Python, Django or opensearch-py version is breaking for someone. Check what
 `python-services` is on first — both `develop` and any long-lived release branch — and make sure the
-version they need is reachable by a tag they can pin before `master` moves past it.
+version they need is reachable by a tag they can pin before `main` moves past it.
 
 Mark such a release with a `feat!:` commit and a `BREAKING CHANGE:` footer.
 

@@ -89,7 +89,7 @@ html_theme_options = {
     # Drives furo's "Edit this page" links. The org, repository and branch must
     # match reality or every source link 404s.
     "source_repository": "https://github.com/django-opensearch/django-opensearch-models/",
-    "source_branch": "master",
+    "source_branch": "main",
     "source_directory": "docs/source/",
 }
 
