@@ -2,10 +2,10 @@ name: Release
 
 # Wires check_release_consistency.py --tag to an actual tag push. Without this,
 # nothing stops a tag being cut from an undated [Unreleased] changelog section,
-# or from a tree whose project.version does not match the tag -- which is the
-# drift that made 1.0.0 untaggable in the first place.
+# or from a tree whose project.version does not match the tag.
 #
-# Three jobs: build once, then fan out to PyPI and to a *draft* GitHub release.
+# Build once, then fan out to PyPI, the documentation, and a *draft* GitHub
+# release.
 # The draft is what makes the ordering safe -- the release is not announced
 # until a human publishes it, so there is never a public release claiming a
 # version PyPI does not have. Same shape as pallets/flask and urllib3.
@@ -13,7 +13,7 @@ name: Release
 on:
   push:
     tags:
-      # Unprefixed, matching the 1.0.0 tag. A `v` prefix will not trigger this.
+      # Tags are unprefixed. A `v` prefix will not trigger this workflow.
       - "[0-9]+.[0-9]+.[0-9]+*"
 
 permissions: {}
@@ -178,3 +178,61 @@ jobs:
             --verify-tag \
             --title "${GITHUB_REF_NAME}" \
             --notes-file release-notes/notes.md
+
+  docs:
+    name: publish the documentation
+    needs: pypi
+    runs-on: ubuntu-24.04
+    # Runs after the PyPI upload so the published documentation never describes
+    # a version the index does not have. Read the Docs also builds on its own
+    # webhook; doing it here as well makes the build part of the release, so a
+    # documentation failure fails the release instead of going unnoticed.
+    steps:
+      - name: Build and activate this version on Read the Docs
+        env:
+          RTD_TOKEN: ${{ secrets.READTHEDOCS_TOKEN }}
+          RTD_PROJECT: django-opensearch-models
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          api="https://readthedocs.org/api/v3/projects/${RTD_PROJECT}"
+          auth="Authorization: Token ${RTD_TOKEN}"
+
+          # The tag reaches Read the Docs through its own webhook, which may not
+          # have fired yet when this job starts.
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' -H "$auth" "${api}/versions/${VERSION}/")"
+            [ "$code" = "200" ] && break
+            if [ "$attempt" = "30" ]; then
+              echo "::error::Read the Docs does not know about version ${VERSION} after 5 minutes."
+              echo "::error::Check that the repository webhook is connected."
+              exit 1
+            fi
+            sleep 10
+          done
+
+          # A new tag is inactive until something activates it, and an inactive
+          # version cannot be built.
+          curl -fsS -X PATCH -H "$auth" -H "Content-Type: application/json" \
+            -d '{"active": true, "hidden": false}' "${api}/versions/${VERSION}/" > /dev/null
+
+          build_id="$(curl -fsS -X POST -H "$auth" "${api}/versions/${VERSION}/builds/" | jq -r '.build.id')"
+          echo "Read the Docs build ${build_id} triggered for ${VERSION}"
+
+          # Poll to completion: a triggered build that fails is still a failed
+          # release, and nothing else would report it.
+          for attempt in $(seq 1 60); do
+            state="$(curl -fsS -H "$auth" "https://readthedocs.org/api/v3/builds/${build_id}/" | jq -r '.state')"
+            if [ "$state" = "finished" ]; then
+              success="$(curl -fsS -H "$auth" "https://readthedocs.org/api/v3/builds/${build_id}/" | jq -r '.success')"
+              if [ "$success" = "true" ]; then
+                echo "Documentation published: https://${RTD_PROJECT}.readthedocs.io/en/${VERSION}/"
+                exit 0
+              fi
+              echo "::error::Read the Docs build ${build_id} failed. See https://readthedocs.org/projects/${RTD_PROJECT}/builds/${build_id}/"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::Read the Docs build ${build_id} did not finish within 10 minutes."
+          exit 1
