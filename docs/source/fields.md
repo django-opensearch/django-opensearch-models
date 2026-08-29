@@ -19,27 +19,66 @@ class CarDocument(Document):
 ## Available fields
 
 Every field takes `attr=None` as its first argument and forwards any remaining keyword arguments to
-the underlying OpenSearch field.
+the underlying OpenSearch field. Two of them add a required argument of their own, shown in the
+tables below.
 
-**Simple fields**
+:::{warning}
+An exception raised inside a property or method a field reads is not suppressed. If `attr` points at
+`Car.display_name` and that property raises, indexing fails with that error rather than writing the
+field as `null`. Only a genuinely absent attribute yields `null`, and only when the field is not
+`required`.
+:::
 
-`BooleanField`, `ByteField`, `CompletionField`, `DateField`, `DoubleField`, `FileField`,
-`FloatField`, `GeoPointField`, `GeoShapeField`, `IntegerField`, `IpField`, `KeywordField`,
-`LongField`, `ScaledFloatField`, `SearchAsYouTypeField`, `ShortField`, `TextField`, `TimeField`
+### Simple fields
 
-Two behave specially:
+| Field | Indexed as |
+| --- | --- |
+| `BooleanField` | `boolean` |
+| `ByteField` | `byte` |
+| `CompletionField` | `completion` |
+| `DateField` | `date` |
+| `DoubleField` | `double` |
+| `FileField` | `text` |
+| `FloatField` | `float` |
+| `GeoPointField` | `geo_point` |
+| `GeoShapeField` | `geo_shape` |
+| `IntegerField` | `integer` |
+| `IpField` | `ip` |
+| `KeywordField` | `keyword` |
+| `LongField` | `long` |
+| `ScaledFloatField(scaling_factor=...)` | `scaled_float` |
+| `SearchAsYouTypeField` | `search_as_you_type` |
+| `ShortField` | `short` |
+| `TextField` | `text` |
+| `TimeField` | `keyword` |
 
-- `FileField` indexes a `FileField`/`ImageField` as its `.url`, or `""` when no file is set —
-  never the `FieldFile` object.
-- `TimeField` is a `KeywordField` that serialises `datetime.time` values with `.isoformat()`.
-  OpenSearch has no native time-of-day type.
+Three of these are more than a rename of the underlying type:
 
-**Range fields**
+`FileField`
+: Indexes a Django `FileField` or `ImageField` as its `.url`, or `""` when no file is set — never the
+  `FieldFile` object.
 
-`IntegerRangeField`, `LongRangeField`, `FloatRangeField`, `DoubleRangeField`, `DateRangeField`,
-`IpRangeField`
+`ScaledFloatField`
+: Requires `scaling_factor`. OpenSearch stores the value as a long multiplied by that factor, so
+  `scaling_factor=100` keeps two decimal places.
 
-A range field holds an interval rather than a point, and its value is a mapping of range bounds:
+`TimeField`
+: A `KeywordField` that serialises `datetime.time` values with `.isoformat()`. OpenSearch has no
+  native time-of-day type.
+
+### Range fields
+
+| Field | Indexed as |
+| --- | --- |
+| `DateRangeField` | `date_range` |
+| `DoubleRangeField` | `double_range` |
+| `FloatRangeField` | `float_range` |
+| `IntegerRangeField` | `integer_range` |
+| `IpRangeField` | `ip_range` |
+| `LongRangeField` | `long_range` |
+
+A range field holds an interval rather than a point, so the attribute must yield a mapping of bounds
+such as `{"gte": "2026-01-01", "lt": "2027-01-01"}` rather than a single value:
 
 ```python
 @registry.register_document
@@ -48,18 +87,32 @@ class SubscriptionDocument(Document):
     price_bracket = fields.DoubleRangeField()
 ```
 
-The attribute must yield something like `{"gte": "2026-01-01", "lt": "2027-01-01"}`. No Django model
-field maps to a range type automatically — `django.contrib.postgres` range fields are not assumed,
-since the package is not a dependency here — so declare these explicitly rather than naming them in
-`Django.fields`.
+No Django model field maps to a range type automatically, since `django.contrib.postgres` is not a
+dependency here. Declare these on the document rather than naming them in `Django.fields`.
 
-**Vector and relevance fields**
+### Vector and relevance fields
 
-`KnnVectorField(dimension, attr=None, **kwargs)` holds a dense vector for k-NN search. `dimension`
-is required and fixes the length of every vector stored in the field:
+| Field | Indexed as |
+| --- | --- |
+| `KnnVectorField(dimension=...)` | `knn_vector` |
+| `RankFeatureField` | `rank_feature` |
+| `RankFeaturesField` | `rank_features` |
+
+`KnnVectorField`
+: A dense vector for k-NN search. `dimension` is required and fixes the length of every vector
+  stored in the field.
+
+`RankFeatureField`
+: A single numeric relevance boost, queried with `rank_feature`.
+
+`RankFeaturesField`
+: A mapping of names to numeric boosts, queried the same way — for a document carrying one boost per
+  category rather than a single score.
 
 ```python
 embedding = fields.KnnVectorField(dimension=384, attr="embedding")
+popularity = fields.RankFeatureField()
+topics = fields.RankFeaturesField()
 ```
 
 :::{important}
@@ -72,30 +125,26 @@ article_index.settings(number_of_shards=1, knn=True)
 ```
 :::
 
-`RankFeatureField` stores a single numeric relevance boost, and `RankFeaturesField` a mapping of
-names to numeric boosts, for use with the `rank_feature` query.
+### Object and nested fields
 
-**Complex fields**
+| Field | Indexed as |
+| --- | --- |
+| `ObjectField` | `object` |
+| `NestedField` | `nested` |
 
-`ObjectField(properties, attr=None, **kwargs)` and `NestedField(properties, attr=None, **kwargs)`,
-where `properties` maps field names to field instances. See
-[Relationships](#relationships) below.
+Both take `properties` as a keyword argument, mapping field names to field instances. `attr` remains
+the first positional argument, as it is for every other field. See [Relationships](#relationships)
+for how they are used, and {ref}`ObjectField or NestedField? <object-or-nested>` for choosing between
+them.
 
-**`ListField(field)`**
+### `ListField`
 
-A wrapper, not a field class. It makes the wrapped field iterate its value, for indexing a
-to-many relationship as a flat list:
+A wrapper rather than a field class, so it has no mapping type of its own. It makes the wrapped field
+iterate its value, for indexing a to-many relationship as a flat list:
 
 ```python
 tags = fields.ListField(fields.KeywordField(attr="tag_names"))
 ```
-
-:::{warning}
-An exception raised inside a property or method that a field reads is not suppressed. If `attr`
-points at `Car.display_name` and that property raises, indexing fails with that error rather than
-writing the field as `null`. Only a genuinely absent attribute yields `null`, and only when the
-field is not `required`.
-:::
 
 ## How Django fields are mapped
 
@@ -214,6 +263,7 @@ the copy of a manufacturer's name inside every car document is written once at i
 updated again — renaming the manufacturer leaves every car wrong until the next full rebuild.
 :::
 
+(object-or-nested)=
 ### `ObjectField` or `NestedField`?
 
 That choice is OpenSearch's, not this library's. `object` flattens sub-fields, so a query cannot
