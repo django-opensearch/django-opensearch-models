@@ -18,6 +18,9 @@ Releases are published to PyPI and are also consumable by git tag. Tags are unpr
   required `dimension`; the index holding one must be created with the `knn` setting enabled.
   `RankFeatureField` and `RankFeaturesField` map single and multiple numeric relevance boosts.
 
+- **Python 3.15 support.** Added to the supported matrix, the tox environments, the CI legs and the
+  classifiers. The suite runs on it under every supported Django version.
+
 - **Range fields.** `IntegerRangeField`, `LongRangeField`, `FloatRangeField`, `DoubleRangeField`,
   `DateRangeField` and `IpRangeField`. No Django model field maps to a range type automatically, so
   these are declared explicitly rather than named in `Django.fields`.

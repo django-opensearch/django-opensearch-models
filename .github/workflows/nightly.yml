@@ -35,11 +35,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13", "3.14"]
+        python: ["3.12", "3.13", "3.14", "3.15"]
         django: ["52", "60", "61"]
         opensearch: ["2.19.6", "3.8.0"]
         # No `exclude:` is needed. requires-python is >=3.12 and Django 6.x
-        # requires >=3.12, so all eighteen cells of this product are valid.
+        # requires >=3.12, so all twenty-four cells of this product are valid.
     env:
       OPENSEARCH_URL: http://127.0.0.1:9200
       OPENSEARCH_SERVER: ${{ matrix.opensearch }}
@@ -75,6 +75,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
+          # The newest supported Python reaches the matrix while it is still in
+          # pre-release, and setup-python will not resolve one without this.
+          allow-prereleases: true
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:

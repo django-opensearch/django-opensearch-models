@@ -36,7 +36,7 @@ real Django querysets when you need them.
 <!-- requirements-start -->
 | | Supported versions |
 | --- | --- |
-| Python | 3.12, 3.13, 3.14 |
+| Python | 3.12, 3.13, 3.14, 3.15 |
 | Django | 5.2, 6.0, 6.1 |
 | [opensearch-py](https://github.com/opensearch-project/opensearch-py) | 3.1+ |
 | OpenSearch server | 2.19, 3.8 |
