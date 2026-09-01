@@ -245,7 +245,15 @@ jobs:
           # Poll to completion: a triggered build that fails is still a failed
           # release, and nothing else would report it. Build detail is nested
           # under the project; there is no top-level /builds/<id>/ endpoint.
-          for attempt in $(seq 1 60); do
+          #
+          # The budget covers queueing as well as building. Read the Docs runs
+          # builds on a shared queue, so the wall-clock time here is not a
+          # function of how large these documents are and is not predictable
+          # from a previous release.
+          attempts=180
+          interval=10
+          state=unknown
+          for _ in $(seq 1 "$attempts"); do
             build="$(curl -fsS -H "$auth" "${api}/builds/${build_id}/")"
             state="$(printf '%s' "$build" | jq -r '.state')"
             if [ "$state" = "finished" ]; then
@@ -257,7 +265,11 @@ jobs:
               echo "::error::Read the Docs build ${build_id} failed. See https://app.readthedocs.org/projects/${RTD_PROJECT}/builds/${build_id}/"
               exit 1
             fi
-            sleep 10
+            sleep "$interval"
           done
-          echo "::error::Read the Docs build ${build_id} did not finish within 10 minutes."
+          # Derived from the loop rather than written out, so the two cannot
+          # disagree, and reporting the last state distinguishes a build still
+          # sitting in the queue from one that is running long.
+          echo "::error::Read the Docs build ${build_id} was still '${state}' after $((attempts * interval / 60)) minutes."
+          echo "::error::See https://app.readthedocs.org/projects/${RTD_PROJECT}/builds/${build_id}/"
           exit 1
