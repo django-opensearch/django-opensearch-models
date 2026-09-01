@@ -105,7 +105,9 @@ class Document(OSDocument):
             kwargs = {"chunk_size": self.django.queryset_pagination}
 
         def rows():
-            with transaction.atomic(savepoint=False):
+            # The transaction has to be opened on the alias the queryset reads from, which a router
+            # or an explicit .using() may have made something other than the default.
+            with transaction.atomic(using=qs.db, savepoint=False):
                 yield from qs.iterator(**kwargs)
 
         return rows()

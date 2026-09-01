@@ -4,7 +4,7 @@ from unittest import SkipTest, TestCase
 from unittest.mock import Mock, patch
 
 from django.conf import settings
-from django.db import connection, models
+from django.db import connection, connections, models
 from django.utils.translation import gettext_lazy as _
 from opensearchpy import GeoPoint, InnerDoc
 
@@ -394,6 +394,7 @@ class BaseDocumentTestCase:
             yield "row"
 
         queryset = Mock()
+        queryset.db = "default"
         queryset.iterator = fake_iterator
 
         doc = CarDocument()
@@ -402,6 +403,31 @@ class BaseDocumentTestCase:
 
         self.assertEqual(rows, ["row"])
         self.assertEqual(observed, [True], "the queryset must be iterated inside an atomic block")
+
+    def test_indexing_queryset_uses_the_transaction_of_its_own_database(self):
+        """
+        Open the transaction on the database the queryset reads from.
+
+        A routed queryset reads from another alias, and that is the connection whose cursor needs the
+        transaction. Opening one on ``default`` would leave the real connection unprotected.
+        """
+        observed = {}
+
+        def fake_iterator(**kwargs):
+            observed["replica"] = connections["replica"].in_atomic_block
+            observed["default"] = connections["default"].in_atomic_block
+            yield "row"
+
+        queryset = Mock()
+        queryset.db = "replica"
+        queryset.iterator = fake_iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            list(doc.get_indexing_queryset())
+
+        self.assertTrue(observed["replica"], "the queryset's own database must be in a transaction")
+        self.assertFalse(observed["default"], "an unrelated database must not be put in a transaction")
 
     def test_internal_state_is_not_serialized_into_the_document(self):
         """

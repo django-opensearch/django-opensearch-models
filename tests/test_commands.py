@@ -47,18 +47,22 @@ class SearchIndexTestCase(WithFixturesMixin, TestCase):
 
         self.doc_a1_qs = Mock()
         self.doc_a1_qs.iterator.return_value = ["a1-row"]
+        self.doc_a1_qs.db = "default"
         self.doc_a1 = self._generate_doc_mock(self.ModelA, self.index_a, self.doc_a1_qs)
 
         self.doc_a2_qs = Mock()
         self.doc_a2_qs.iterator.return_value = ["a2-row"]
+        self.doc_a2_qs.db = "default"
         self.doc_a2 = self._generate_doc_mock(self.ModelA, self.index_a, self.doc_a2_qs)
 
         self.doc_b1_qs = Mock()
         self.doc_b1_qs.iterator.return_value = ["b1-row"]
+        self.doc_b1_qs.db = "default"
         self.doc_b1 = self._generate_doc_mock(self.ModelB, self.index_a, self.doc_b1_qs)
 
         self.doc_c1_qs = Mock()
         self.doc_c1_qs.iterator.return_value = ["c1-row"]
+        self.doc_c1_qs.db = "default"
         self.doc_c1 = self._generate_doc_mock(self.ModelC, self.index_b, self.doc_c1_qs)
 
         self._mock_setup()
@@ -163,6 +167,7 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
         self.index_a = Index("foo")
 
         self.doc_a1_qs = Mock()
+        self.doc_a1_qs.db = "default"
         self.doc_a1 = self._generate_doc_mock(self.ModelA, self.index_a, self.doc_a1_qs)
 
         patch("django_opensearch_models.management.commands.search_index.registry", self.registry).start()
@@ -232,6 +237,23 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
 
         self.index_a.delete.assert_called_once()
         self.assertNotIn("Deleted index", self.out.getvalue())
+
+    def test_rebuild_with_alias_reports_a_failed_cleanup_without_hiding_the_cause(self):
+        """
+        Let the original failure reach the caller when the cleanup fails too.
+
+        An unreachable cluster fails the populate and then the cleanup delete too. The delete is the
+        second symptom, so surfacing it in place of the original would point at the wrong thing.
+        """
+        self.index_a.delete.side_effect = RuntimeError("cluster unreachable")
+
+        with (
+            patch.object(Command, "_populate", side_effect=ValueError("populate exploded")),
+            self.assertRaises(ValueError) as caught,
+        ):
+            call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+
+        self.assertEqual(str(caught.exception), "populate exploded")
 
     def test_rebuild_with_alias_keeps_the_new_index_when_populate_succeeds(self):
         call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)

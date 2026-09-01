@@ -63,9 +63,11 @@ class OSField(Field):
                     instance = getattr(instance, attr)
                 except ObjectDoesNotExist:
                     return None
-                # Only AttributeError means "no such attribute, try a sequence index". A TypeError
-                # here escaped the body of a property or descriptor and is a defect in that code, so
-                # it propagates rather than being recorded as a missing value.
+                # An AttributeError is ambiguous -- the attribute may be absent, or a property body
+                # may have raised one -- and both are treated as a failed lookup, falling through to
+                # the sequence-index attempt below. A TypeError is not ambiguous: `attr` is always a
+                # string here, so it can only have escaped the body of a property or descriptor, and
+                # it propagates instead of being recorded as a missing value.
                 except AttributeError:
                     try:
                         instance = instance[int(attr)]

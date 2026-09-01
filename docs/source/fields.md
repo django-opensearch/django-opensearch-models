@@ -23,10 +23,11 @@ the underlying OpenSearch field. Two of them add a required argument of their ow
 tables below.
 
 :::{warning}
-An exception raised inside a property or method a field reads is not suppressed. If `attr` points at
-`Car.display_name` and that property raises, indexing fails with that error rather than writing the
-field as `null`. Only a genuinely absent attribute yields `null`, and only when the field is not
-`required`.
+`attr` resolution does not report every failure. A `TypeError` from a property or descriptor
+propagates, as does anything raised by a method the field calls, so indexing fails with that error
+rather than writing `null`. An `AttributeError` does not: it cannot be told apart from an absent
+attribute, so it yields `null`, or `VariableLookupError` when the field is `required`. A missing
+related object raises `ObjectDoesNotExist`, which always yields `null` and ignores `required`.
 :::
 
 ### Simple fields

@@ -249,7 +249,13 @@ class Command(BaseCommand):
             # Until the alias is moved onto it, the suffixed index is referenced by nothing and its
             # name is never derived again, so a failure here would strand it in the cluster for good.
             if options["use_alias"]:
-                self._delete_unaliased_indices(models)
+                try:
+                    self._delete_unaliased_indices(models)
+                except Exception as cleanup_error:  # ruff: ignore[blind-except]
+                    # Whatever stopped the rebuild -- an unreachable cluster, most likely -- tends to
+                    # stop the cleanup as well. That failure is the second symptom, so it is reported
+                    # rather than raised, leaving the original cause to propagate.
+                    self.stderr.write(f"Could not delete the new indices: {cleanup_error}")
             raise
 
         if options["use_alias"]:

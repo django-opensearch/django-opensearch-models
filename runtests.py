@@ -64,7 +64,13 @@ def configure(signal_processor):
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
                 "NAME": ":memory:",
-            }
+            },
+            # A second alias so tests can tell "opened a transaction" apart from
+            # "opened a transaction on the database the queryset actually reads".
+            "replica": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": ":memory:",
+            },
         },
         INSTALLED_APPS=[
             "django.contrib.auth",

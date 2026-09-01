@@ -130,7 +130,7 @@ jobs:
             opensearch: "2.19.6"
           - name: "py315 dj61 os3.8.0 (ceiling)"
             python: "3.15"
-            toxenv: py314-dj61
+            toxenv: py315-dj61
             opensearch: "3.8.0"
     env:
       OPENSEARCH_URL: http://127.0.0.1:9200
