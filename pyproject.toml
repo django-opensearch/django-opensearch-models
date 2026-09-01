@@ -1,6 +1,6 @@
 [project]
 name = "django-opensearch-models"
-version = "1.1.0"
+version = "1.2.0"
 description = "Wrapper around opensearch-py for Django models"
 readme = "README.md"
 # Django 6.0 and 6.1 both require Python >=3.12. Setting the floor there as well

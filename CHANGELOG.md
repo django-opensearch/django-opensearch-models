@@ -12,6 +12,10 @@ Releases are published to PyPI and are also consumable by git tag. Tags are unpr
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.2.0] - 2026-08-31
+
 ### Added
 
 - **Vector and relevance fields.** `KnnVectorField` maps a dense vector for k-NN search and takes a
@@ -40,7 +44,8 @@ Releases are published to PyPI and are also consumable by git tag. Tags are unpr
 
 - `get_indexing_queryset()` draws its rows inside a transaction. Outside one, PostgreSQL serves the
   server-side cursor behind `iterator()` as `WITH HOLD` and materialises the entire result set to
-  temporary storage before the first row is returned.
+  temporary storage before the first row is returned. The iterator holds that transaction open for as
+  long as it is alive, so close it if you call the hook yourself; `search_index --populate` does.
 
 ### Fixed
 

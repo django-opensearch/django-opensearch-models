@@ -46,10 +46,24 @@ the package does not actually have is worse than no version at all.
    This is the same gate `release.yml` runs. It refuses a tag that does not match `project.version`,
    and refuses to cut a release from an undated `[Unreleased]` section.
 
-5. **Commit, tag, push:**
+5. **Land the bump on `main`, then tag it.** `main` is protected: it refuses a direct push, so the
+   release commit goes through a pull request like any other change. Only a review or an admin
+   override gets it in, and you cannot approve your own.
+
    ```bash
+   git checkout -b release/1.1.0
+   git commit -am "chore: release 1.1.0"
+   git push -u origin release/1.1.0
+   gh pr create --base main --title "chore: release 1.1.0" --body "..."
+   gh pr merge --squash --admin --subject "chore: release 1.1.0" --body "..."
+   ```
+
+   **Tag the squashed commit on `main`, not the branch tip** -- squashing rewrites it, and a tag on
+   the branch commit points at something `main` does not contain:
+
+   ```bash
+   git checkout main && git pull --ff-only
    git tag -a 1.1.0 -m "django-opensearch-models 1.1.0"
-   git push origin main
    git push origin 1.1.0
    ```
 
