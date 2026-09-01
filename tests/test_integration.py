@@ -6,8 +6,10 @@ from django.core.management import call_command
 from django.test import TransactionTestCase
 from django.utils.translation import gettext_lazy as _
 from opensearchpy import Index as OSIndex
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy import connections
+from opensearchpy.exceptions import NotFoundError, RequestError
 
+from django_opensearch_models import fields
 from django_opensearch_models.test import OSTestCase, is_os_online
 
 from .documents import (
@@ -417,3 +419,112 @@ class IntegrationTestCase(OSTestCase, TransactionTestCase):
         except NotFoundError:
             self.fail(f"document with _id '{article_slug}' not found: using a custom id is broken")
         self.assertEqual(os_obj.slug, article.slug)
+
+
+@unittest.skipUnless(is_os_online(), "OpenSearch is offline")
+class VectorAndRangeFieldMappingTestCase(unittest.TestCase):
+    """
+    Exercise the vector and range fields against a real cluster.
+
+    Building a field object proves nothing about whether OpenSearch will accept it: an unsupported
+    mapping type or a missing required parameter is only rejected at ``indices.create``.
+    """
+
+    index_name = "dosm_vector_and_range_mapping_test"
+
+    FIELDS = {
+        "embedding": {"field": fields.KnnVectorField(dimension=3), "type": "knn_vector", "value": [0.1, 0.2, 0.3]},
+        "popularity": {"field": fields.RankFeatureField(), "type": "rank_feature", "value": 12.5},
+        "topics": {
+            "field": fields.RankFeaturesField(),
+            "type": "rank_features",
+            "value": {"politics": 20, "sport": 3},
+        },
+        "age_bracket": {
+            "field": fields.IntegerRangeField(),
+            "type": "integer_range",
+            "value": {"gte": 18, "lt": 30},
+        },
+        "run_length": {"field": fields.LongRangeField(), "type": "long_range", "value": {"gte": 1, "lte": 100}},
+        "ratio_bracket": {
+            "field": fields.FloatRangeField(),
+            "type": "float_range",
+            "value": {"gte": 0.5, "lte": 1.5},
+        },
+        "price_bracket": {
+            "field": fields.DoubleRangeField(),
+            "type": "double_range",
+            "value": {"gte": 1.5, "lte": 9.5},
+        },
+        "period": {
+            "field": fields.DateRangeField(),
+            "type": "date_range",
+            "value": {"gte": "2026-01-01", "lte": "2026-12-31"},
+        },
+        "network": {
+            "field": fields.IpRangeField(),
+            "type": "ip_range",
+            "value": {"gte": "10.0.0.1", "lte": "10.0.0.255"},
+        },
+    }
+
+    def setUp(self):
+        self.connection = connections.get_connection()
+        self.connection.indices.delete(index=self.index_name, ignore=[400, 404])
+        self.addCleanup(self.connection.indices.delete, index=self.index_name, ignore=[400, 404])
+
+        self.connection.indices.create(
+            index=self.index_name,
+            body={
+                # knn_vector needs this to be queryable. See
+                # test_a_knn_vector_without_the_knn_setting_is_accepted_but_unqueryable.
+                "settings": {"index": {"knn": True}},
+                "mappings": {"properties": {name: spec["field"].to_dict() for name, spec in self.FIELDS.items()}},
+            },
+        )
+
+    def test_mappings_are_stored_as_declared(self):
+        properties = self.connection.indices.get_mapping(index=self.index_name)[self.index_name]["mappings"][
+            "properties"
+        ]
+
+        for name, spec in self.FIELDS.items():
+            with self.subTest(field=name):
+                self.assertEqual(properties[name]["type"], spec["type"])
+
+    def test_a_knn_vector_without_the_knn_setting_is_accepted_but_unqueryable(self):
+        """
+        Pin the trap that makes the ``knn`` index setting easy to miss.
+
+        A ``knn_vector`` field in an index that never opted into k-NN is not rejected anywhere the
+        operator would notice: the mapping is accepted and documents index normally. Only the query
+        fails, long after the index was built.
+        """
+        unflagged = f"{self.index_name}_no_knn"
+        self.connection.indices.delete(index=unflagged, ignore=[400, 404])
+        self.addCleanup(self.connection.indices.delete, index=unflagged, ignore=[400, 404])
+
+        created = self.connection.indices.create(
+            index=unflagged,
+            body={"mappings": {"properties": {"embedding": fields.KnnVectorField(dimension=3).to_dict()}}},
+        )
+        self.assertTrue(created["acknowledged"], "the mapping is accepted without the knn setting")
+
+        indexed = self.connection.index(index=unflagged, id=1, body={"embedding": [0.1, 0.2, 0.3]}, refresh=True)
+        self.assertEqual(indexed["result"], "created", "documents index without the knn setting")
+
+        with self.assertRaises(RequestError) as caught:
+            self.connection.search(
+                index=unflagged,
+                body={"query": {"knn": {"embedding": {"vector": [0.1, 0.2, 0.3], "k": 1}}}},
+            )
+
+        self.assertIn("not built for ANN search", str(caught.exception))
+
+    def test_values_round_trip(self):
+        source = {name: spec["value"] for name, spec in self.FIELDS.items()}
+
+        self.connection.index(index=self.index_name, id=1, body=source, refresh=True)
+
+        stored = self.connection.get(index=self.index_name, id=1)["_source"]
+        self.assertEqual(stored, source)

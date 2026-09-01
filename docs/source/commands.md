@@ -50,7 +50,10 @@ $ ./manage.py search_index --rebuild
 `--use-alias`
 : Treat the document's index name as an alias, and rebuild into a fresh timestamped index that the
   alias is atomically repointed at. Searches never see a missing or half-populated index. See
-  {ref}`Rebuilding without downtime <rebuilding-without-downtime>`.
+  {ref}`Rebuilding without downtime <rebuilding-without-downtime>`. If creating or populating that
+  new index fails, it is deleted before the error is re-raised — nothing references it, and its
+  timestamped name is never derived again — so a retry starts clean rather than accumulating
+  half-built indices.
 
 `--use-alias-keep-index`
 : With `--rebuild --use-alias`, keep the index the alias previously pointed at instead of deleting

@@ -2,7 +2,7 @@ from collections import deque
 from fnmatch import fnmatch
 from functools import partial
 
-from django.db import models
+from django.db import models, transaction
 from opensearchpy import Document as OSDocument
 from opensearchpy.helpers import bulk, parallel_bulk
 
@@ -56,8 +56,13 @@ class Document(OSDocument):
 
     def __init__(self, related_instance_to_ignore=None, **kwargs):
         super().__init__(**kwargs)
-        self._related_instance_to_ignore = related_instance_to_ignore
-        self._prepared_fields = self.init_prepare()
+        # opensearch-py's AttrDict.__setattr__ diverts any name that is not already an attribute of
+        # the class into _d_, the document's field data, where to_dict() will serialize it. That
+        # catches _related_instance_to_ignore, which has no class-level default; _prepared_fields has
+        # one and is safe either way. Both are bookkeeping for prepare() rather than content, so both
+        # are set past that machinery and stay that way if the default is ever dropped.
+        object.__setattr__(self, "_related_instance_to_ignore", related_instance_to_ignore)
+        object.__setattr__(self, "_prepared_fields", self.init_prepare())
 
     def __eq__(self, other):
         return id(self) == id(other)
@@ -87,12 +92,34 @@ class Document(OSDocument):
         return self.django.model._default_manager.all()
 
     def get_indexing_queryset(self):
-        """Build queryset (iterator) for use by indexing."""
+        """
+        Build queryset (iterator) for use by indexing.
+
+        The rows are drawn inside an atomic block. Outside one, PostgreSQL declares the server-side
+        cursor behind ``iterator()`` as ``WITH HOLD``, which materialises the entire result set into
+        temporary storage before the first row is returned. A queryset is lazy, so wrapping only its
+        construction would achieve nothing -- the iteration itself has to happen inside the block,
+        which is what the generator is for.
+
+        The transaction therefore lives as long as the generator. **Close it.** A generator abandoned
+        part way through -- which is what a failed bulk does -- holds its block open until garbage
+        collection runs, and that block then ends at an arbitrary later point, possibly inside
+        unrelated work it will discard. ``search_index --populate`` closes it in a ``finally``.
+        """
         qs = self.get_queryset()
         kwargs = {}
         if self.django.queryset_pagination:
             kwargs = {"chunk_size": self.django.queryset_pagination}
-        return qs.iterator(**kwargs)
+
+        def rows():
+            # The transaction has to be opened on the alias the queryset reads from, which a router
+            # or an explicit .using() may have made something other than the default. `savepoint` is
+            # left at its default: at the outermost level Django issues no savepoint either way, and
+            # suppressing it would let an abandoned generator mark an enclosing block for rollback.
+            with transaction.atomic(using=qs.db):
+                yield from qs.iterator(**kwargs)
+
+        return rows()
 
     def init_prepare(self):
         """
@@ -150,16 +177,20 @@ class Document(OSDocument):
             msg = f"Cannot convert model field {field_name} to an OpenSearch field!"
             raise ModelFieldNotMappedError(msg) from e
 
+    def _with_chunk_size(self, kwargs):
+        """Size the bulk request from ``queryset_pagination`` unless the caller picked a size."""
+        if self.django.queryset_pagination and "chunk_size" not in kwargs:
+            kwargs["chunk_size"] = self.django.queryset_pagination
+        return kwargs
+
     def bulk(self, actions, **kwargs):
-        response = bulk(client=self._get_connection(), actions=actions, **kwargs)
+        response = bulk(client=self._get_connection(), actions=actions, **self._with_chunk_size(kwargs))
         # send post index signal
         post_index.send(sender=self.__class__, instance=self, actions=actions, response=response)
         return response
 
     def parallel_bulk(self, actions, **kwargs):
-        if self.django.queryset_pagination and "chunk_size" not in kwargs:
-            kwargs["chunk_size"] = self.django.queryset_pagination
-        bulk_actions = parallel_bulk(client=self._get_connection(), actions=actions, **kwargs)
+        bulk_actions = parallel_bulk(client=self._get_connection(), actions=actions, **self._with_chunk_size(kwargs))
         # As the `parallel_bulk` is lazy, we need to get it into `deque` to run it instantly
         # See https://discuss.elastic.co/t/helpers-parallel-bulk-in-python-not-working/39498/2
         deque(bulk_actions, maxlen=0)

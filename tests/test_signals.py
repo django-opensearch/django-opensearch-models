@@ -73,6 +73,23 @@ class CelerySignalProcessorTestCase(TestCase):
     def test_unrelated_model_is_not_indexed(self):
         self.assertFalse(self.processor.is_instance_indexed(ContentType(pk=1)))
 
+    def test_no_task_is_enqueued_for_an_unregistered_model(self):
+        """The predicate gates every handler, so a worker is never handed a model it would discard."""
+        unregistered = ContentType(pk=1)
+
+        with (
+            patch.object(CelerySignalProcessor.save, "delay") as save,
+            patch.object(CelerySignalProcessor.delete_related, "delay") as delete_related,
+            patch.object(CelerySignalProcessor.delete, "delay") as delete,
+        ):
+            self.processor.handle_save(None, unregistered)
+            self.processor.handle_pre_delete(None, unregistered)
+            self.processor.handle_delete(None, unregistered)
+
+        save.assert_not_called()
+        delete_related.assert_not_called()
+        delete.assert_not_called()
+
 
 @skipIf(CelerySignalProcessor is None, "celery is not installed")
 class CelerySignalProcessorDeleteTestCase(TestCase):

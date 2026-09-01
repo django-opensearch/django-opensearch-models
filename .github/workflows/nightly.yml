@@ -136,7 +136,7 @@ jobs:
 
       # Everything else installs from uv.lock, which resolves the newest
       # compatible versions. This is the only job that proves the *declared*
-      # floors (django>=5.2, opensearch-py>=3.0) actually work, rather than
+      # floors (django>=5.2, opensearch-py>=3.1) actually work, rather than
       # being an untested claim in pyproject.toml.
       - run: uv run --frozen --no-default-groups --group tox tox run -e lowest
 

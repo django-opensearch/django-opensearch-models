@@ -4,7 +4,7 @@ from unittest import SkipTest, TestCase
 from unittest.mock import Mock, patch
 
 from django.conf import settings
-from django.db import models
+from django.db import connection, connections, models
 from django.utils.translation import gettext_lazy as _
 from opensearchpy import GeoPoint, InnerDoc
 
@@ -356,6 +356,141 @@ class BaseDocumentTestCase:
             doc.update([car1, car2, car3], parallel=True)
             self.assertEqual(mock_bulk.call_count, 0, "bulk is not called")
             self.assertEqual(mock_parallel_bulk.call_count, 1, "parallel bulk is called")
+
+    def test_serial_bulk_uses_queryset_pagination_as_chunk_size(self):
+        """``queryset_pagination`` sizes the bulk request on the serial path, as it does in parallel."""
+        doc = CarDocument()
+
+        with (
+            patch.object(CarDocument.django, "queryset_pagination", 2),
+            patch("django_opensearch_models.documents.bulk") as mock_bulk,
+        ):
+            doc.update([Car(), Car(), Car()])
+
+        self.assertEqual(mock_bulk.call_args.kwargs["chunk_size"], 2)
+
+    def test_explicit_chunk_size_beats_queryset_pagination(self):
+        doc = CarDocument()
+
+        with (
+            patch.object(CarDocument.django, "queryset_pagination", 2),
+            patch("django_opensearch_models.documents.bulk") as mock_bulk,
+        ):
+            doc.update([Car()], chunk_size=500)
+
+        self.assertEqual(mock_bulk.call_args.kwargs["chunk_size"], 500)
+
+    def test_indexing_queryset_is_consumed_inside_a_transaction(self):
+        """
+        Draw the indexing rows inside an atomic block.
+
+        PostgreSQL promotes a server-side cursor to WITH HOLD outside a transaction, which spills the
+        whole result set to temporary storage.
+        """
+        observed = []
+
+        def fake_iterator(**kwargs):
+            observed.append(connection.in_atomic_block)
+            yield "row"
+
+        queryset = Mock()
+        queryset.db = "default"
+        queryset.iterator = fake_iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            rows = list(doc.get_indexing_queryset())
+
+        self.assertEqual(rows, ["row"])
+        self.assertEqual(observed, [True], "the queryset must be iterated inside an atomic block")
+
+    def test_indexing_queryset_uses_the_transaction_of_its_own_database(self):
+        """
+        Open the transaction on the database the queryset reads from.
+
+        A routed queryset reads from another alias, and that is the connection whose cursor needs the
+        transaction. Opening one on ``default`` would leave the real connection unprotected.
+        """
+        observed = {}
+
+        def fake_iterator(**kwargs):
+            observed["replica"] = connections["replica"].in_atomic_block
+            observed["default"] = connections["default"].in_atomic_block
+            yield "row"
+
+        queryset = Mock()
+        queryset.db = "replica"
+        queryset.iterator = fake_iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            list(doc.get_indexing_queryset())
+
+        self.assertTrue(observed["replica"], "the queryset's own database must be in a transaction")
+        self.assertFalse(observed["default"], "an unrelated database must not be put in a transaction")
+
+    def _indexing_generator(self, rows=("a", "b", "c")):
+        def iterator(**kwargs):
+            yield from rows
+
+        queryset = Mock()
+        queryset.db = "default"
+        queryset.iterator = iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            return doc.get_indexing_queryset()
+
+    def test_indexing_queryset_draws_rows_one_at_a_time(self):
+        """Materialising the queryset up front would defeat the chunking the whole hook exists for."""
+        produced = []
+
+        def iterator(**kwargs):
+            for row in ("a", "b", "c"):
+                produced.append(row)
+                yield row
+
+        queryset = Mock()
+        queryset.db = "default"
+        queryset.iterator = iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            generator = doc.get_indexing_queryset()
+            next(generator)
+            self.assertEqual(produced, ["a"], "the rows must not be materialised up front")
+            generator.close()
+
+    def test_closing_the_indexing_generator_ends_its_transaction(self):
+        """The block must end when the caller is done, not whenever the generator is collected."""
+        generator = self._indexing_generator()
+        next(generator)
+        self.assertTrue(connection.in_atomic_block)
+
+        generator.close()
+
+        self.assertFalse(connection.in_atomic_block, "closing the generator must close its transaction")
+
+    def test_internal_state_is_not_serialized_into_the_document(self):
+        """
+        Keep bookkeeping attributes out of the serialized document.
+
+        opensearch-py routes any attribute that is not declared on the class into the document's field
+        data, so those attributes have to be set past that machinery or they are indexed.
+        """
+        doc = CarDocument(related_instance_to_ignore=Manufacturer(name="Peugeot"))
+
+        serialized = doc.to_dict()
+        self.assertNotIn("_related_instance_to_ignore", serialized)
+        self.assertNotIn("_prepared_fields", serialized)
+
+    def test_internal_state_stays_readable(self):
+        manufacturer = Manufacturer(name="Peugeot")
+
+        doc = CarDocument(related_instance_to_ignore=manufacturer)
+
+        self.assertIs(doc._related_instance_to_ignore, manufacturer)
+        self.assertEqual(len(doc._prepared_fields), 4)
 
     def test_init_prepare_correct(self):
         """Check if init_prepare() runs and collects the right preparation functions."""

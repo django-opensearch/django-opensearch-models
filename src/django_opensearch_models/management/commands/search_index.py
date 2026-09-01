@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -122,7 +124,15 @@ class Command(BaseCommand):
                 )
             )
             qs = doc().get_indexing_queryset()
-            doc().update(qs, parallel=parallel, refresh=options["refresh"])
+            try:
+                doc().update(qs, parallel=parallel, refresh=options["refresh"])
+            finally:
+                # The iterator holds a transaction open for as long as it is alive, and a failed bulk
+                # abandons it part way through. Closing it here ends that block at the failure rather
+                # than whenever the garbage collector happens to run.
+                close = getattr(qs, "close", None)
+                if close is not None:
+                    close()
 
     def _get_alias_indices(self, alias):
         alias_indices = self.os_conn.indices.get_alias(name=alias)
@@ -210,6 +220,18 @@ class Command(BaseCommand):
                 for index in old_indices:
                     self.stdout.write(f"Deleted index '{index}'")
 
+    def _delete_unaliased_indices(self, models):
+        """
+        Drop the freshly created indices of an aborted aliased rebuild.
+
+        The failure may have come before some of them were created, so a missing index is not an
+        error here -- but it is also not something to report as deleted.
+        """
+        for index in registry.get_indices(models):
+            response = index.delete(ignore=HTTPStatus.NOT_FOUND)
+            if response.get("acknowledged"):
+                self.stdout.write(f"Deleted index '{index._name}'")
+
     def _rebuild(self, models, aliases, options):
         if not options["use_alias"] and not self._delete(models, aliases, options):
             return
@@ -228,8 +250,23 @@ class Command(BaseCommand):
                 alias_index_pairs.append({"alias": index._name, "index": new_index})
                 index._name = new_index
 
-        self._create(models, aliases, options)
-        self._populate(models, options)
+        try:
+            self._create(models, aliases, options)
+            self._populate(models, options)
+        except BaseException:
+            # BaseException, not Exception: a long rebuild is most often ended with Ctrl-C, and a
+            # KeyboardInterrupt that skipped the cleanup would strand exactly the index this exists
+            # to remove. Until the alias is moved onto it, that index is referenced by nothing and
+            # its name is never derived again, so nothing would ever find it.
+            if options["use_alias"]:
+                try:
+                    self._delete_unaliased_indices(models)
+                except Exception as cleanup_error:  # ruff: ignore[blind-except]
+                    # Whatever stopped the rebuild -- an unreachable cluster, most likely -- tends to
+                    # stop the cleanup as well. That failure is the second symptom, so it is reported
+                    # rather than raised, leaving the original cause to propagate.
+                    self.stderr.write(f"Could not delete the new indices: {cleanup_error}")
+            raise
 
         if options["use_alias"]:
             for alias_index_pair in alias_index_pairs:

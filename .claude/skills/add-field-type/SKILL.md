@@ -40,11 +40,11 @@ Two edits, both required:
 Missing the `__all__` entry means the field is importable but not part of the public surface, and it
 will not appear in `from django_opensearch_models import *`.
 
-## 3. `docs/source/fields.rst`
+## 3. `docs/source/fields.md`
 
-Add it to the "Available Fields" list under Simple or Complex Fields, matching the existing
-signature style. This list is a third hand-maintained copy of the same set — it is where the drift
-shows up.
+Add a row to the table for its group, giving the OpenSearch type it maps to, and a definition-list
+entry below only if it needs more than a type. This is a third hand-maintained copy of the same set —
+it is where the drift shows up.
 
 ## 4. `tests/test_fields.py`
 
@@ -73,8 +73,12 @@ uv run python -c "import django_opensearch_models as m; print('YourField' in m._
 Then a real round-trip against a container, because a mapping that OpenSearch rejects only fails at
 `index.create()`. See the `run-tests` skill.
 
-## Out of scope unless asked
+## Vector fields
 
-Vector / k-NN field support is a known gap with no ticket yet. It needs a `KnnVectorField` wrapper —
-note opensearch-py 3.1 renamed the DSL field `DenseVector` to `KnnVector` — plus index-level `knn`
-settings documentation. Do not add it as a side effect of another change.
+`KnnVectorField` wraps `KnnVector`, which opensearch-py spells `DenseVector` below 3.1 — hence the
+`opensearch-py>=3.1` floor. An index holding one needs `knn=True` in its settings, and nothing
+enforces that: the mapping is accepted and documents index either way, and only a k-NN query fails.
+Any new vector field inherits that trap, so say so wherever it is documented.
+
+`SparseVectorField` is deliberately absent: OpenSearch 2.19 has no `sparse_vector` type at all, and
+that release is in the support matrix.

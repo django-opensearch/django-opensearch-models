@@ -36,11 +36,16 @@ classifiers = [
 ]
 dependencies = [
     "django>=5.2",
-    # The floor stays at 3.0 rather than 3.2 deliberately: 3.2 hard-pins
-    # opensearch-protobufs==1.2.0, and forcing an exact transitive pin on every
+    # 3.1 is the floor because it is where the DSL field for a k-NN vector became
+    # `KnnVector`, mapping to `knn_vector`. The 3.0 spelling, `DenseVector`, maps
+    # to `dense_vector`, which OpenSearch has no handler for, so `KnnVectorField`
+    # cannot be supported below 3.1 by any shim.
+    #
+    # The floor deliberately stops short of 3.2, which hard-pins
+    # opensearch-protobufs==1.2.0: forcing an exact transitive pin on every
     # consumer is a poor trade for a fix they get anyway via the lockfile. The
     # `lowest` tox environment proves the floor still works.
-    "opensearch-py>=3.0,<4",
+    "opensearch-py>=3.1,<4",
 ]
 
 [project.urls]

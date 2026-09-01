@@ -10,17 +10,26 @@ from opensearchpy import (
     Byte,
     Completion,
     Date,
+    DateRange,
     Double,
+    DoubleRange,
     Field,
     Float,
+    FloatRange,
     GeoPoint,
     GeoShape,
     Integer,
+    IntegerRange,
     Ip,
+    IpRange,
     Keyword,
+    KnnVector,
     Long,
+    LongRange,
     Nested,
     Object,
+    RankFeature,
+    RankFeatures,
     ScaledFloat,
     SearchAsYouType,
     Short,
@@ -54,7 +63,12 @@ class OSField(Field):
                     instance = getattr(instance, attr)
                 except ObjectDoesNotExist:
                     return None
-                except (TypeError, AttributeError):
+                # An AttributeError is ambiguous -- the attribute may be absent, or a property body
+                # may have raised one -- and both are treated as a failed lookup, falling through to
+                # the sequence-index attempt below. A TypeError is not ambiguous: `attr` is always a
+                # string here, so it can only have escaped the body of a property or descriptor, and
+                # it propagates instead of being recorded as a missing value.
+                except AttributeError:
                     try:
                         instance = instance[int(attr)]
                     except (IndexError, ValueError, KeyError, TypeError) as e:
@@ -84,31 +98,24 @@ class ObjectField(OSField, Object):
     def _get_inner_field_data(self, obj, field_value_to_ignore=None):
         data = {}
 
-        if hasattr(self, "properties"):
-            for name, field in self.properties.to_dict().items():
-                if not isinstance(field, OSField):
-                    continue
+        # Both declaration styles end up with a `_doc_class` -- `properties={...}` has one generated
+        # for it, `doc_class=SomeInnerDoc` keeps the class it was given -- so its mapping is the one
+        # place the inner fields are read from.
+        doc_instance = self._doc_class()
+        for name, field in self._doc_class._doc_type.mapping.properties._params.get("properties", {}).items():
+            if not isinstance(field, OSField):
+                continue
 
-                if field._path == []:
-                    field._path = [name]
+            if field._path == []:
+                field._path = [name]
 
+            # This allows for retrieving data from an InnerDoc with prepare_field_name functions.
+            prep_func = getattr(doc_instance, f"prepare_{name}", None)
+
+            if prep_func:
+                data[name] = prep_func(obj)
+            else:
                 data[name] = field.get_value_from_instance(obj, field_value_to_ignore)
-        else:
-            doc_instance = self._doc_class()
-            for name, field in self._doc_class._doc_type.mapping.properties._params.get("properties", {}).items():
-                if not isinstance(field, OSField):
-                    continue
-
-                if field._path == []:
-                    field._path = [name]
-
-                # This allows for retrieving data from an InnerDoc with prepare_field_name functions.
-                prep_func = getattr(doc_instance, f"prepare_{name}", None)
-
-                if prep_func:
-                    data[name] = prep_func(obj)
-                else:
-                    data[name] = field.get_value_from_instance(obj, field_value_to_ignore)
 
         # This allows for ObjectFields to be indexed from dicts with
         # dynamic keys (i.e. keys/fields not defined in 'properties')
@@ -238,3 +245,47 @@ class TimeField(KeywordField):
         if time:
             return time.isoformat()
         return None
+
+
+class KnnVectorField(OSField, KnnVector):
+    """
+    A dense vector for k-NN search.
+
+    ``dimension`` is required and fixes the length of every vector in the field.
+
+    The index must also be created with the ``knn`` setting enabled. Nothing enforces that when the
+    index is built: OpenSearch accepts the mapping and indexes documents into it either way, and only
+    a k-NN query fails, with ``Field '<name>' is not built for ANN search``.
+    """
+
+
+class RankFeatureField(OSField, RankFeature):
+    pass
+
+
+class RankFeaturesField(OSField, RankFeatures):
+    pass
+
+
+class IntegerRangeField(OSField, IntegerRange):
+    pass
+
+
+class FloatRangeField(OSField, FloatRange):
+    pass
+
+
+class LongRangeField(OSField, LongRange):
+    pass
+
+
+class DoubleRangeField(OSField, DoubleRange):
+    pass
+
+
+class DateRangeField(OSField, DateRange):
+    pass
+
+
+class IpRangeField(OSField, IpRange):
+    pass
