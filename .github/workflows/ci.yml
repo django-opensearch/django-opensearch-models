@@ -128,9 +128,9 @@ jobs:
             python: "3.14"
             toxenv: py314-dj60
             opensearch: "2.19.6"
-          - name: "py315 dj61 os3.8.0 (ceiling)"
-            python: "3.15"
-            toxenv: py315-dj61
+          - name: "py314 dj61 os3.8.0 (ceiling)"
+            python: "3.14"
+            toxenv: py314-dj61
             opensearch: "3.8.0"
     env:
       OPENSEARCH_URL: http://127.0.0.1:9200
@@ -169,9 +169,6 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-          # The ceiling leg tracks the newest supported Python, which reaches
-          # the matrix while it is still in pre-release.
-          allow-prereleases: true
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:

@@ -15,11 +15,9 @@ Releases are published to PyPI and are also consumable by git tag. Tags are unpr
 ### Added
 
 - **Vector and relevance fields.** `KnnVectorField` maps a dense vector for k-NN search and takes a
-  required `dimension`; the index holding one must be created with the `knn` setting enabled.
+  required `dimension`. The index holding one must be created with the `knn` setting enabled; if it
+  is not, OpenSearch still accepts the mapping and indexes documents, and only a k-NN query fails.
   `RankFeatureField` and `RankFeaturesField` map single and multiple numeric relevance boosts.
-
-- **Python 3.15 support.** Added to the supported matrix, the tox environments, the CI legs and the
-  classifiers. The suite runs on it under every supported Django version.
 
 - **Range fields.** `IntegerRangeField`, `LongRangeField`, `FloatRangeField`, `DoubleRangeField`,
   `DateRangeField` and `IpRangeField`. No Django model field maps to a range type automatically, so

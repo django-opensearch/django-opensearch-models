@@ -78,8 +78,9 @@ Three of these are more than a rename of the underlying type:
 | `IpRangeField` | `ip_range` |
 | `LongRangeField` | `long_range` |
 
-A range field holds an interval rather than a point, so the attribute must yield a mapping of bounds
-such as `{"gte": "2026-01-01", "lt": "2027-01-01"}` rather than a single value:
+A range field holds an interval rather than a point, so the attribute yields a mapping of bounds such
+as `{"gte": "2026-01-01", "lt": "2027-01-01"}` rather than a single value. `IpRangeField` is the
+exception: it takes the same bounds mapping or a CIDR string such as `"10.0.0.0/24"`.
 
 ```python
 @registry.register_document
@@ -116,14 +117,18 @@ popularity = fields.RankFeatureField()
 topics = fields.RankFeaturesField()
 ```
 
-:::{important}
-An index containing a `KnnVectorField` must be created with k-NN enabled, or OpenSearch rejects the
-mapping outright:
+:::{warning}
+An index containing a `KnnVectorField` must be created with k-NN enabled:
 
 ```python
 article_index = Index("articles")
 article_index.settings(number_of_shards=1, knn=True)
 ```
+
+Nothing tells you if you forget. OpenSearch accepts the mapping, `search_index --create` succeeds,
+and documents index normally — the field simply has no ANN structure behind it. The omission
+surfaces only when a k-NN query runs, as `Field 'embedding' is not built for ANN search`, and fixing
+it needs a rebuild rather than a settings change.
 :::
 
 ### Object and nested fields

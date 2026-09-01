@@ -4,6 +4,7 @@ from unittest.mock import DEFAULT, Mock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 
 from django_opensearch_models import Index
 from django_opensearch_models.management.commands.search_index import Command
@@ -65,6 +66,13 @@ class SearchIndexTestCase(WithFixturesMixin, TestCase):
         self.doc_c1_qs.db = "default"
         self.doc_c1 = self._generate_doc_mock(self.ModelC, self.index_b, self.doc_c1_qs)
 
+        self.docs = {
+            "a1": self.doc_a1,
+            "a2": self.doc_a2,
+            "b1": self.doc_b1,
+            "c1": self.doc_c1,
+        }
+
         self._mock_setup()
 
     def test_get_models(self):
@@ -103,33 +111,68 @@ class SearchIndexTestCase(WithFixturesMixin, TestCase):
         self.index_a.create.assert_called_once()
         self.index_b.create.assert_called_once()
 
-    def assert_populated_with(self, doc, rows, **expected_kwargs):
-        """``update`` is handed a lazy iterator, so assert the rows it yields rather than its identity."""
-        doc.update.assert_called_once()
-        args, kwargs = doc.update.call_args
-        self.assertEqual(list(args[0]), rows)
-        self.assertEqual(kwargs, expected_kwargs)
+    def record_rows_passed_to(self, doc):
+        """
+        Capture what ``update`` is given, while it is still readable.
+
+        The iterator is closed as soon as ``_populate`` is done with it, so reading it afterwards
+        yields nothing. Materialising it inside the call is the only way to see the rows.
+        """
+        captured = {}
+
+        def update(rows, **kwargs):
+            captured["rows"] = list(rows)
+            captured["kwargs"] = kwargs
+
+        doc.update.side_effect = update
+        return captured
+
+    def assert_populated_with(self, captured, rows, **expected_kwargs):
+        self.assertEqual(captured.get("rows"), rows)
+        self.assertEqual(captured.get("kwargs"), expected_kwargs)
+
+    def test_populate_leaves_no_transaction_open_when_indexing_fails(self):
+        """
+        Close the indexing iterator on the way out.
+
+        Indexing draws its rows inside a transaction, and a bulk failure abandons the iterator part
+        way through. Left to garbage collection, that transaction stays open on the connection and
+        ends at an arbitrary later moment -- possibly inside unrelated work, which it then discards.
+        """
+
+        def fail_after_reading_a_row(rows, **kwargs):
+            next(iter(rows))
+            msg = "bulk failed"
+            raise RuntimeError(msg)
+
+        self.doc_a1.update.side_effect = fail_after_reading_a_row
+
+        with self.assertRaises(RuntimeError):
+            call_command("search_index", stdout=self.out, action="populate", models=["foo"])
+
+        self.assertFalse(connection.in_atomic_block, "populate left a transaction open on the connection")
 
     def test_populate_all_doc_type(self):
+        captured = {name: self.record_rows_passed_to(doc) for name, doc in self.docs.items()}
+
         call_command("search_index", stdout=self.out, action="populate")
+
         expected_kwargs = {"parallel": False, "refresh": None}
-        # One call for "Indexing NNN documents", one for indexing itself (via get_indexing_queryset).
-        self.assertEqual(self.doc_a1.get_queryset.call_count, 2)
-        self.assert_populated_with(self.doc_a1, ["a1-row"], **expected_kwargs)
-        self.assertEqual(self.doc_a2.get_queryset.call_count, 2)
-        self.assert_populated_with(self.doc_a2, ["a2-row"], **expected_kwargs)
-        self.assertEqual(self.doc_b1.get_queryset.call_count, 2)
-        self.assert_populated_with(self.doc_b1, ["b1-row"], **expected_kwargs)
-        self.assertEqual(self.doc_c1.get_queryset.call_count, 2)
-        self.assert_populated_with(self.doc_c1, ["c1-row"], **expected_kwargs)
+        for name, store in captured.items():
+            with self.subTest(document=name):
+                # One call for "Indexing NNN documents", one for indexing itself.
+                self.assertEqual(self.docs[name].get_queryset.call_count, 2)
+                self.assert_populated_with(store, [f"{name}-row"], **expected_kwargs)
 
     def test_populate_all_doc_type_refresh(self):
+        captured = {name: self.record_rows_passed_to(doc) for name, doc in self.docs.items()}
+
         call_command("search_index", stdout=self.out, action="populate", refresh=True)
+
         expected_kwargs = {"parallel": False, "refresh": True}
-        self.assert_populated_with(self.doc_a1, ["a1-row"], **expected_kwargs)
-        self.assert_populated_with(self.doc_a2, ["a2-row"], **expected_kwargs)
-        self.assert_populated_with(self.doc_b1, ["b1-row"], **expected_kwargs)
-        self.assert_populated_with(self.doc_c1, ["c1-row"], **expected_kwargs)
+        for name, store in captured.items():
+            with self.subTest(document=name):
+                self.assert_populated_with(store, [f"{name}-row"], **expected_kwargs)
 
     def test_rebuild_indices(self):
         with patch.multiple(Command, _create=DEFAULT, _delete=DEFAULT, _populate=DEFAULT) as handles:
@@ -163,16 +206,25 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
 
     def setUp(self):
         self.out = StringIO()
+        self.err = StringIO()
         self.registry = DocumentRegistry()
         self.index_a = Index("foo")
+        # A second registered index, deliberately outside the --models scope of every test here, so
+        # that a cleanup pass which ignored that scope would be visible.
+        self.index_b = Index("bar")
 
         self.doc_a1_qs = Mock()
         self.doc_a1_qs.db = "default"
         self.doc_a1 = self._generate_doc_mock(self.ModelA, self.index_a, self.doc_a1_qs)
 
+        self.doc_c1_qs = Mock()
+        self.doc_c1_qs.db = "default"
+        self.doc_c1 = self._generate_doc_mock(self.ModelC, self.index_b, self.doc_c1_qs)
+
         patch("django_opensearch_models.management.commands.search_index.registry", self.registry).start()
-        for method in ("delete", "create"):
-            patch.object(self.index_a, method).start()
+        for index in (self.index_a, self.index_b):
+            for method in ("delete", "create"):
+                patch.object(index, method).start()
 
         self.os_conn = Mock()
         self.os_conn.indices.get_alias.return_value = {}
@@ -192,7 +244,15 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
         return call.kwargs["body"]
 
     def test_rebuild_with_alias_adds_the_alias(self):
-        call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+        call_command(
+            "search_index",
+            stdout=self.out,
+            stderr=self.err,
+            action="rebuild",
+            models=["foo"],
+            use_alias=True,
+            force=True,
+        )
 
         self.os_conn.indices.update_aliases.assert_called_once()
         body = self.assert_body_only(self.os_conn.indices.update_aliases.call_args)
@@ -203,7 +263,15 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
         # the same atomic action as the alias being added.
         self.os_conn.indices.exists.return_value = True
 
-        call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+        call_command(
+            "search_index",
+            stdout=self.out,
+            stderr=self.err,
+            action="rebuild",
+            models=["foo"],
+            use_alias=True,
+            force=True,
+        )
 
         body = self.assert_body_only(self.os_conn.indices.update_aliases.call_args)
         self.assertEqual(body["actions"][1], {"remove_index": {"index": "foo"}})
@@ -219,9 +287,18 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
         self.index_a.delete.return_value = {"acknowledged": True}
 
         with patch.object(Command, "_populate", side_effect=boom), self.assertRaises(RuntimeError):
-            call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+            call_command(
+                "search_index",
+                stdout=self.out,
+                stderr=self.err,
+                action="rebuild",
+                models=["foo"],
+                use_alias=True,
+                force=True,
+            )
 
         self.index_a.delete.assert_called_once()
+        self.index_b.delete.assert_not_called()
         self.os_conn.indices.update_aliases.assert_not_called()
         self.assertIn("Deleted index", self.out.getvalue())
 
@@ -233,7 +310,15 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
             patch.object(Command, "_populate", side_effect=RuntimeError("populate exploded")),
             self.assertRaises(RuntimeError),
         ):
-            call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+            call_command(
+                "search_index",
+                stdout=self.out,
+                stderr=self.err,
+                action="rebuild",
+                models=["foo"],
+                use_alias=True,
+                force=True,
+            )
 
         self.index_a.delete.assert_called_once()
         self.assertNotIn("Deleted index", self.out.getvalue())
@@ -251,12 +336,30 @@ class AliasWireFormatTestCase(WithFixturesMixin, TestCase):
             patch.object(Command, "_populate", side_effect=ValueError("populate exploded")),
             self.assertRaises(ValueError) as caught,
         ):
-            call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+            call_command(
+                "search_index",
+                stdout=self.out,
+                stderr=self.err,
+                action="rebuild",
+                models=["foo"],
+                use_alias=True,
+                force=True,
+            )
 
         self.assertEqual(str(caught.exception), "populate exploded")
+        self.assertIn("Could not delete the new indices", self.err.getvalue())
+        self.assertIn("cluster unreachable", self.err.getvalue())
 
     def test_rebuild_with_alias_keeps_the_new_index_when_populate_succeeds(self):
-        call_command("search_index", stdout=self.out, action="rebuild", use_alias=True, force=True)
+        call_command(
+            "search_index",
+            stdout=self.out,
+            stderr=self.err,
+            action="rebuild",
+            models=["foo"],
+            use_alias=True,
+            force=True,
+        )
 
         self.index_a.delete.assert_not_called()
 

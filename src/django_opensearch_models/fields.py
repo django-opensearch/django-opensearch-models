@@ -98,8 +98,9 @@ class ObjectField(OSField, Object):
     def _get_inner_field_data(self, obj, field_value_to_ignore=None):
         data = {}
 
-        # Both declaration styles -- `properties={...}` and `doc_class=SomeInnerDoc` -- are given a
-        # generated `_doc_class`, so the mapping is the single place the inner fields are read from.
+        # Both declaration styles end up with a `_doc_class` -- `properties={...}` has one generated
+        # for it, `doc_class=SomeInnerDoc` keeps the class it was given -- so its mapping is the one
+        # place the inner fields are read from.
         doc_instance = self._doc_class()
         for name, field in self._doc_class._doc_type.mapping.properties._params.get("properties", {}).items():
             if not isinstance(field, OSField):
@@ -250,8 +251,11 @@ class KnnVectorField(OSField, KnnVector):
     """
     A dense vector for k-NN search.
 
-    ``dimension`` is required and fixes the length of every vector in the field. The index it lives
-    in must also be created with the ``knn`` setting enabled, or OpenSearch rejects the mapping.
+    ``dimension`` is required and fixes the length of every vector in the field.
+
+    The index must also be created with the ``knn`` setting enabled. Nothing enforces that when the
+    index is built: OpenSearch accepts the mapping and indexes documents into it either way, and only
+    a k-NN query fails, with ``Field '<name>' is not built for ANN search``.
     """
 
 

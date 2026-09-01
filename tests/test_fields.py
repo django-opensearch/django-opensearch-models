@@ -487,7 +487,7 @@ class KnnVectorFieldTestCase(TestCase):
 
         self.assertEqual({"type": "knn_vector", "dimension": 3}, field.to_dict())
 
-    def test_get_mapping_with_method(self):
+    def test_get_mapping_forwards_extra_options(self):
         field = KnnVectorField(dimension=2, space_type="cosinesimil")
 
         self.assertEqual(

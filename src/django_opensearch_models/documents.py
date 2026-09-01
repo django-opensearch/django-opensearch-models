@@ -57,8 +57,10 @@ class Document(OSDocument):
     def __init__(self, related_instance_to_ignore=None, **kwargs):
         super().__init__(**kwargs)
         # opensearch-py's AttrDict.__setattr__ diverts any name that is not already an attribute of
-        # the class into _d_, the document's field data, where to_dict() will serialize it. These two
-        # are bookkeeping for prepare(), not content, so they are set past that machinery.
+        # the class into _d_, the document's field data, where to_dict() will serialize it. That
+        # catches _related_instance_to_ignore, which has no class-level default; _prepared_fields has
+        # one and is safe either way. Both are bookkeeping for prepare() rather than content, so both
+        # are set past that machinery and stay that way if the default is ever dropped.
         object.__setattr__(self, "_related_instance_to_ignore", related_instance_to_ignore)
         object.__setattr__(self, "_prepared_fields", self.init_prepare())
 
@@ -98,6 +100,11 @@ class Document(OSDocument):
         temporary storage before the first row is returned. A queryset is lazy, so wrapping only its
         construction would achieve nothing -- the iteration itself has to happen inside the block,
         which is what the generator is for.
+
+        The transaction therefore lives as long as the generator. **Close it.** A generator abandoned
+        part way through -- which is what a failed bulk does -- holds its block open until garbage
+        collection runs, and that block then ends at an arbitrary later point, possibly inside
+        unrelated work it will discard. ``search_index --populate`` closes it in a ``finally``.
         """
         qs = self.get_queryset()
         kwargs = {}
@@ -106,8 +113,10 @@ class Document(OSDocument):
 
         def rows():
             # The transaction has to be opened on the alias the queryset reads from, which a router
-            # or an explicit .using() may have made something other than the default.
-            with transaction.atomic(using=qs.db, savepoint=False):
+            # or an explicit .using() may have made something other than the default. `savepoint` is
+            # left at its default: at the outermost level Django issues no savepoint either way, and
+            # suppressing it would let an abandoned generator mark an enclosing block for rollback.
+            with transaction.atomic(using=qs.db):
                 yield from qs.iterator(**kwargs)
 
         return rows()

@@ -124,7 +124,15 @@ class Command(BaseCommand):
                 )
             )
             qs = doc().get_indexing_queryset()
-            doc().update(qs, parallel=parallel, refresh=options["refresh"])
+            try:
+                doc().update(qs, parallel=parallel, refresh=options["refresh"])
+            finally:
+                # The iterator holds a transaction open for as long as it is alive, and a failed bulk
+                # abandons it part way through. Closing it here ends that block at the failure rather
+                # than whenever the garbage collector happens to run.
+                close = getattr(qs, "close", None)
+                if close is not None:
+                    close()
 
     def _get_alias_indices(self, alias):
         alias_indices = self.os_conn.indices.get_alias(name=alias)
@@ -245,9 +253,11 @@ class Command(BaseCommand):
         try:
             self._create(models, aliases, options)
             self._populate(models, options)
-        except Exception:
-            # Until the alias is moved onto it, the suffixed index is referenced by nothing and its
-            # name is never derived again, so a failure here would strand it in the cluster for good.
+        except BaseException:
+            # BaseException, not Exception: a long rebuild is most often ended with Ctrl-C, and a
+            # KeyboardInterrupt that skipped the cleanup would strand exactly the index this exists
+            # to remove. Until the alias is moved onto it, that index is referenced by nothing and
+            # its name is never derived again, so nothing would ever find it.
             if options["use_alias"]:
                 try:
                     self._delete_unaliased_indices(models)

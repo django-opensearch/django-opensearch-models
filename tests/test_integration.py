@@ -7,7 +7,7 @@ from django.test import TransactionTestCase
 from django.utils.translation import gettext_lazy as _
 from opensearchpy import Index as OSIndex
 from opensearchpy import connections
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import NotFoundError, RequestError
 
 from django_opensearch_models import fields
 from django_opensearch_models.test import OSTestCase, is_os_online
@@ -476,7 +476,8 @@ class VectorAndRangeFieldMappingTestCase(unittest.TestCase):
         self.connection.indices.create(
             index=self.index_name,
             body={
-                # knn_vector is rejected unless the index opts into k-NN.
+                # knn_vector needs this to be queryable. See
+                # test_a_knn_vector_without_the_knn_setting_is_accepted_but_unqueryable.
                 "settings": {"index": {"knn": True}},
                 "mappings": {"properties": {name: spec["field"].to_dict() for name, spec in self.FIELDS.items()}},
             },
@@ -490,6 +491,35 @@ class VectorAndRangeFieldMappingTestCase(unittest.TestCase):
         for name, spec in self.FIELDS.items():
             with self.subTest(field=name):
                 self.assertEqual(properties[name]["type"], spec["type"])
+
+    def test_a_knn_vector_without_the_knn_setting_is_accepted_but_unqueryable(self):
+        """
+        Pin the trap that makes the ``knn`` index setting easy to miss.
+
+        A ``knn_vector`` field in an index that never opted into k-NN is not rejected anywhere the
+        operator would notice: the mapping is accepted and documents index normally. Only the query
+        fails, long after the index was built.
+        """
+        unflagged = f"{self.index_name}_no_knn"
+        self.connection.indices.delete(index=unflagged, ignore=[400, 404])
+        self.addCleanup(self.connection.indices.delete, index=unflagged, ignore=[400, 404])
+
+        created = self.connection.indices.create(
+            index=unflagged,
+            body={"mappings": {"properties": {"embedding": fields.KnnVectorField(dimension=3).to_dict()}}},
+        )
+        self.assertTrue(created["acknowledged"], "the mapping is accepted without the knn setting")
+
+        indexed = self.connection.index(index=unflagged, id=1, body={"embedding": [0.1, 0.2, 0.3]}, refresh=True)
+        self.assertEqual(indexed["result"], "created", "documents index without the knn setting")
+
+        with self.assertRaises(RequestError) as caught:
+            self.connection.search(
+                index=unflagged,
+                body={"query": {"knn": {"embedding": {"vector": [0.1, 0.2, 0.3], "k": 1}}}},
+            )
+
+        self.assertIn("not built for ANN search", str(caught.exception))
 
     def test_values_round_trip(self):
         source = {name: spec["value"] for name, spec in self.FIELDS.items()}

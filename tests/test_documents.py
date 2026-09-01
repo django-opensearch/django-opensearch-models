@@ -429,6 +429,48 @@ class BaseDocumentTestCase:
         self.assertTrue(observed["replica"], "the queryset's own database must be in a transaction")
         self.assertFalse(observed["default"], "an unrelated database must not be put in a transaction")
 
+    def _indexing_generator(self, rows=("a", "b", "c")):
+        def iterator(**kwargs):
+            yield from rows
+
+        queryset = Mock()
+        queryset.db = "default"
+        queryset.iterator = iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            return doc.get_indexing_queryset()
+
+    def test_indexing_queryset_draws_rows_one_at_a_time(self):
+        """Materialising the queryset up front would defeat the chunking the whole hook exists for."""
+        produced = []
+
+        def iterator(**kwargs):
+            for row in ("a", "b", "c"):
+                produced.append(row)
+                yield row
+
+        queryset = Mock()
+        queryset.db = "default"
+        queryset.iterator = iterator
+
+        doc = CarDocument()
+        with patch.object(CarDocument, "get_queryset", return_value=queryset):
+            generator = doc.get_indexing_queryset()
+            next(generator)
+            self.assertEqual(produced, ["a"], "the rows must not be materialised up front")
+            generator.close()
+
+    def test_closing_the_indexing_generator_ends_its_transaction(self):
+        """The block must end when the caller is done, not whenever the generator is collected."""
+        generator = self._indexing_generator()
+        next(generator)
+        self.assertTrue(connection.in_atomic_block)
+
+        generator.close()
+
+        self.assertFalse(connection.in_atomic_block, "closing the generator must close its transaction")
+
     def test_internal_state_is_not_serialized_into_the_document(self):
         """
         Keep bookkeeping attributes out of the serialized document.
